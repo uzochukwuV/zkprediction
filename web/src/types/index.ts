@@ -1,0 +1,125 @@
+// Types for zkPrediction - Minority Wins Prediction Market
+
+export interface PredictionParams {
+  question: string;
+  optionA: string;
+  optionB: string;
+  deadline: number;
+  reservePrice: bigint;
+  poolToken: string;
+}
+
+export type PredictionStatus = 'Open' | 'Closed' | 'Resolved' | 'Settled';
+
+export interface Prediction {
+  id: number;
+  params: PredictionParams;
+  status: PredictionStatus;
+  betCount: number;
+  totalPool: bigint;
+  countA: number;
+  countB: number;
+  winningOption: number | null;
+  minorityOption: number | null;
+  minorityCount: number | null;
+  minorityTotal: bigint | null;
+  creator: string;
+}
+
+export interface Commitment {
+  bettor: string;
+  commitment: string;
+  escrowAmount: bigint;
+}
+
+export interface Bet {
+  slot: number;
+  choice: number; // 0 = Option A, 1 = Option B
+  amount: bigint;
+  commitment: string;
+  blindingFactor: string;
+  timestamp: number;
+}
+
+export interface CreatePredictionInput {
+  question: string;
+  optionA: string;
+  optionB: string;
+  deadline: number;
+  reservePrice: bigint;
+}
+
+export interface CommitBetInput {
+  predictionId: number;
+  choice: number;
+  amount: bigint;
+  blindingFactor: string;
+}
+
+export interface WalletState {
+  address: string | null;
+  isConnected: boolean;
+  isConnecting: boolean;
+  error: string | null;
+}
+
+export interface TransactionState {
+  pending: boolean;
+  hash: string | null;
+  error: string | null;
+}
+
+export interface ZKProof {
+  proof: string;
+  publicInputs: string;
+  vkHash: string;
+}
+
+export interface ContractConfig {
+  contractId: string;
+  network: 'testnet' | 'mainnet';
+  rpcUrl: string;
+}
+
+// Events from contract
+export interface PredictionCreatedEvent {
+  id: number;
+  creator: string;
+  deadline: number;
+}
+
+export interface BetCommittedEvent {
+  predictionId: number;
+  slot: number;
+  bettor: string;
+  choice: number;
+  amount: bigint;
+}
+
+export interface PredictionResolvedEvent {
+  predictionId: number;
+  winningOption: number;
+  minorityOption: number;
+}
+
+export interface PredictionSettledEvent {
+  predictionId: number;
+}
+
+// API response types
+export interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+// User's local bet tracking
+export interface UserBet {
+  predictionId: number;
+  choice: number;
+  amount: bigint;
+  blindingFactor: string;
+  slot: number;
+  committed: boolean;
+  claimed: boolean;
+}
