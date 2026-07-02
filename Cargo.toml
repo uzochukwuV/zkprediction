@@ -1,0 +1,10 @@
+[workspace]
+members = ["contracts/prediction"]
+resolver = "2"
+
+[profile.release]
+overflow-checks = true
+
+# Override getrandom to use a wasm-compatible version
+[patch.crates-io]
+getrandom = { git = "https://github.com/rust-random/getrandom", rev = "8e9a0d169891e0a7d3a1a2cf7e90c8a8d8e3f2e", version = "0.2" }

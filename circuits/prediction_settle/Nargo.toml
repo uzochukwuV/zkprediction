@@ -1,0 +1,5 @@
+[package]
+name = "prediction_settle"
+type = "bin"
+
+[dependencies]
