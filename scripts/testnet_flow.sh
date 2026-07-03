@@ -87,12 +87,44 @@ echo "Prediction ID: ${PREDICTION_ID}"
 echo "Deadline: ${DEADLINE}"
 echo ""
 
-echo -e "${YELLOW}[3/4] Committing votes...${NC}"
+echo -e "${YELLOW}[3/4] Setting up bettors and committing votes...${NC}"
 stellar keys generate better1 --network "${NETWORK}" --fund 2>/dev/null || true
 stellar keys generate better2 --network "${NETWORK}" --fund 2>/dev/null || true
 
 BETTER1="$(stellar keys address better1)"
 BETTER2="$(stellar keys address better2)"
+
+# Setup trustlines for bettors
+stellar contract invoke \
+  --source better1 \
+  --network "${NETWORK}" \
+  --id "${POOL_TOKEN}" \
+  -- trust \
+  --addr "${BETTER1}" 2>/dev/null || true
+
+stellar contract invoke \
+  --source better2 \
+  --network "${NETWORK}" \
+  --id "${POOL_TOKEN}" \
+  -- trust \
+  --addr "${BETTER2}" 2>/dev/null || true
+
+# Mint tokens to bettors (if token_admin is available)
+stellar contract invoke \
+  --source token_admin \
+  --network "${NETWORK}" \
+  --id "${POOL_TOKEN}" \
+  -- mint \
+  --to "${BETTER1}" \
+  --amount "${BET_ONE}" 2>/dev/null || true
+
+stellar contract invoke \
+  --source token_admin \
+  --network "${NETWORK}" \
+  --id "${POOL_TOKEN}" \
+  -- mint \
+  --to "${BETTER2}" \
+  --amount "${BET_TWO}" 2>/dev/null || true
 
 VOTE1=0
 NONCE1=11
