@@ -35,6 +35,8 @@ NETWORK="testnet"
 NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 RPC_URL="https://soroban-testnet.stellar.org:443"
 IDENTITY="deployer"
+# Default SAC token (TESTCOIN on testnet)
+POOL_TOKEN="${POOL_TOKEN:-CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV}"
 
 cd "$(dirname "$0")/.."
 
@@ -81,12 +83,14 @@ CONTRACT_ID=$(stellar contract deploy \
   --source $IDENTITY \
   --network $NETWORK \
   -- --admin $(stellar keys address $IDENTITY) \
+  --pool_token "${POOL_TOKEN}" \
   --vk_bytes-file-path "$VK_BYTES_PATH")
 
 cat > .deployment.json << EOF
 {
   "network": "$NETWORK",
   "contract_id": "$CONTRACT_ID",
+  "pool_token": "$POOL_TOKEN",
   "vk_bytes_path": "$VK_BYTES_PATH",
   "wasm_hash": "$(sha256sum target/wasm32v1-none/release/prediction.wasm | cut -d' ' -f1)",
   "deployed_at": "$(date -Iseconds)"
