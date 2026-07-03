@@ -54,7 +54,8 @@ fi
 pushd "${CIRCUIT_DIR}" >/dev/null
 
 echo "[1/2] Executing circuit to generate witness..."
-"${NARGO_BIN}" execute --program-dir "${CIRCUIT_DIR}"
+"${NARGO_BIN}" compile
+"${NARGO_BIN}" execute
 
 WITNESS_FILE="${CIRCUIT_DIR}/target/prediction_settle.gz"
 if [[ ! -f "${WITNESS_FILE}" ]]; then
@@ -74,15 +75,20 @@ fi
 
 echo "[2/2] Generating proof..."
 "${BB_BIN}" prove \
-  -b "${CIRCUIT_DIR}/target/prediction_settle.json" \
-  -w "${WITNESS_FILE}" \
-  -k "${CIRCUIT_DIR}/target/vk/vk" \
-  -o "${PROOF_DIR}" \
-  --verifier_target noir-recursive
+  --scheme ultra_honk \
+  --oracle_hash keccak \
+  --bytecode_path "${CIRCUIT_DIR}/target/prediction_settle.json" \
+  --witness_path "${WITNESS_FILE}" \
+  --output_path "${PROOF_DIR}" \
+  --output_format bytes_and_fields
 
-PROOF_PATH="${PROOF_DIR}"
-if [[ -d "${PROOF_DIR}" ]]; then
+if [[ -f "${PROOF_DIR}/proof" ]]; then
   PROOF_PATH="${PROOF_DIR}/proof"
+elif [[ -f "${PROOF_DIR}" ]]; then
+  PROOF_PATH="${PROOF_DIR}"
+else
+  echo "Expected proof bytes not found in ${PROOF_DIR}"
+  exit 1
 fi
 xxd -p -c 999999 "${PROOF_PATH}" | tr -d '\n' > "${OUT_DIR}/proof.hex"
 

@@ -51,6 +51,12 @@ IDENTITY="deployer"
 
 cd "$(dirname "$0")/.."
 
+CIRCUIT_DIR="${ROOT_DIR}/circuits/prediction_settle"
+VK_DIR="${CIRCUIT_DIR}/target/vk"
+VK_BYTES_PATH="${VK_DIR}/vk"
+VK_HASH_PATH="${VK_DIR}/vk_hash"
+
+
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  zkPrediction Deployment Script${NC}"
 echo -e "${GREEN}  Outcome Based Prediction Market${NC}"
@@ -70,15 +76,19 @@ echo -e "${YELLOW}[3/5] Building Soroban contract...${NC}"
 stellar contract build --manifest-path contracts/prediction/Cargo.toml
 
 echo -e "${YELLOW}[4/5] Compiling Noir circuit...${NC}"
-cd circuits/prediction_settle
+cd "$CIRCUIT_DIR"
 "${NARGO_BIN}" compile
 
 echo -e "${YELLOW}[5/5] Generating verification key...${NC}"
-mkdir -p target/vk
-"${BB_BIN}" write_vk -b target/prediction_settle.json -o target/vk --verifier_target noir-recursive
-VK_HASH_HEX="$(xxd -p -c 999999 target/vk/vk_hash | tr -d '\n')"
+rm -rf "$VK_DIR" "${CIRCUIT_DIR}/target/vk_fields.json"
+mkdir -p "$VK_DIR"
+"${BB_BIN}" write_vk \
+  -b target/prediction_settle.json \
+  -o "$VK_DIR" \
+  -t noir-recursive
+VK_HASH_HEX="$(xxd -p -c 999999 "$VK_HASH_PATH" | tr -d '\n')"
 
-cd ../..
+cd "$ROOT_DIR"
 
 echo -e "${YELLOW}Deploying contract...${NC}"
 CONTRACT_ID=$(stellar contract deploy \
@@ -86,13 +96,14 @@ CONTRACT_ID=$(stellar contract deploy \
   --source $IDENTITY \
   --network $NETWORK \
   -- --admin $(stellar keys address $IDENTITY) \
-  --vk_hash $VK_HASH_HEX)
+  --vk_bytes-file-path "$VK_BYTES_PATH")
 
 cat > .deployment.json << EOF
 {
   "network": "$NETWORK",
   "contract_id": "$CONTRACT_ID",
   "vk_hash": "$VK_HASH_HEX",
+  "vk_bytes_path": "$VK_BYTES_PATH",
   "wasm_hash": "$(sha256sum target/wasm32v1-none/release/prediction.wasm | cut -d' ' -f1)",
   "deployed_at": "$(date -Iseconds)"
 }

@@ -10,12 +10,11 @@
 
 use soroban_sdk::{
     contract, contractimpl, contractmeta, contracttype,
-    token::Client as TokenClient,
     Address, Bytes, BytesN, Env, String,
 };
 
 mod verification;
-use verification::UltraHonkVerifier;
+use verification::{UltraHonkVerifier, VkLoadError, PROOF_BYTES};
 
 const MAX_BETS: u32 = 16;
 
@@ -24,6 +23,7 @@ const MAX_BETS: u32 = 16;
 pub enum DataKey {
     Admin,
     VkHash,
+    VkBytes,
     PredictionCount,
     Prediction(u64),
     Commitment(u64, u32),
@@ -84,11 +84,14 @@ pub struct PredictionContract;
 
 #[contractimpl]
 impl PredictionContract {
-    pub fn __constructor(env: Env, admin: Address, vk_hash: BytesN<32>) {
+    pub fn __constructor(env: Env, admin: Address, vk_bytes: Bytes) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("Already initialized");
         }
+
+        let vk_hash: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::VkBytes, &vk_bytes);
         env.storage().instance().set(&DataKey::VkHash, &vk_hash);
         env.storage().instance().set(&DataKey::PredictionCount, &0u64);
     }
@@ -152,7 +155,6 @@ impl PredictionContract {
     ) -> u32 {
         let mut prediction = get_prediction(&env, prediction_id);
 
-
         let slot = prediction.bet_count;
         let commitment_data = Commitment {
             bettor: bettor.clone(),
@@ -213,6 +215,33 @@ impl PredictionContract {
         true
     }
 
+    pub fn verify_proof(env: Env, proof: Bytes, public_inputs: Bytes) -> bool {
+        let proof_len = proof.len() as usize;
+        if proof_len != PROOF_BYTES {
+            return false;
+        }
+
+        Self::verify_proof_bytes(&env, proof, public_inputs)
+    }
+
+    fn verify_proof_bytes(env: &Env, proof: Bytes, public_inputs: Bytes) -> bool {
+        let vk_bytes = env
+            .storage()
+            .instance()
+            .get::<_, Bytes>(&DataKey::VkBytes)
+            .expect("VK bytes not set");
+
+        let verifier = match UltraHonkVerifier::new(env, &vk_bytes) {
+            Ok(verifier) => verifier,
+            Err(err) => match err {
+                VkLoadError::WrongLength => panic!("VK parse error: wrong length"),
+                VkLoadError::InvalidParameters => panic!("VK parse error: invalid parameters"),
+            },
+        };
+
+        verifier.verify(env, &proof, &public_inputs).is_ok()
+    }
+
     pub fn claim_reward(
         env: Env,
         prediction_id: u64,
@@ -238,13 +267,7 @@ impl PredictionContract {
             winning_option,
         );
 
-        let stored_vk_hash = env.storage().instance().get::<_, BytesN<32>>(&DataKey::VkHash).expect("VK hash not set");
-        let verifier = UltraHonkVerifier::new(&env);
-        let is_valid = verifier.verify(&proof, &public_inputs, &stored_vk_hash);
-        assert!(is_valid, "ZK proof verification failed");
-
-        let choice_wins = winning_option == 0 || winning_option == 1;
-        assert!(choice_wins, "Invalid market outcome");
+        assert!(Self::verify_proof(env.clone(), proof, public_inputs), "ZK proof verification failed");
 
         let winning_count = if winning_option == 0 {
             prediction.count_a.expect("Count A not set")
@@ -266,6 +289,10 @@ impl PredictionContract {
 
     pub fn get_commitment(env: Env, prediction_id: u64, slot: u32) -> Commitment {
         env.storage().instance().get(&DataKey::Commitment(prediction_id, slot)).expect("Commitment not found")
+    }
+
+    pub fn get_vk_bytes(env: Env) -> Bytes {
+        env.storage().instance().get::<_, Bytes>(&DataKey::VkBytes).expect("VK bytes not set")
     }
 
     pub fn get_vk_hash(env: Env) -> BytesN<32> {

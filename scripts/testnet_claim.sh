@@ -11,8 +11,10 @@ PREDICTION_ID="${1:-${PREDICTION_ID:-1}}"
 SLOT="${SLOT:-0}"
 VOTE="${VOTE:-0}"
 NONCE="${NONCE:-11}"
-WINNING_OPTION="${WINNING_OPTION:-0}"
+WINNING_OPTION="${WINNING_OPTION:-}"
 CONTRACT_ID="${CONTRACT_ID:-}"
+CLAIM_SOURCE="${CLAIM_SOURCE:-${IDENTITY}}"
+CLAIM_DEBUG="${CLAIM_DEBUG:-1}"
 
 if [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
   if command -v wsl.exe >/dev/null 2>&1; then
@@ -51,12 +53,33 @@ make_commitment_hex() {
   ' "$vote_value" "$nonce_value")
 }
 
+json_field() {
+  local key="$1"
+  local json="$2"
+  printf '%s' "$json" | sed -n "s/.*\"${key}\":\([^,}]*\).*/\1/p" | sed 's/^"//; s/"$//'
+}
+
 if [[ -z "${CONTRACT_ID}" ]]; then
   CONTRACT_ID="$(grep -o '"contract_id": *"[^"]*"' "${ROOT_DIR}/.deployment.json" | head -n1 | sed 's/.*"contract_id": *"\([^"]*\)"/\1/')"
 fi
 if [[ -z "${CONTRACT_ID}" ]]; then
   echo "Could not determine contract id"
   exit 1
+fi
+
+if [[ -z "${WINNING_OPTION}" ]]; then
+  PREDICTION_JSON="$(stellar contract invoke \
+    --id "${CONTRACT_ID}" \
+    --source "${IDENTITY}" \
+    --network "${NETWORK}" \
+    -- get_prediction \
+    --prediction_id "${PREDICTION_ID}")"
+  WINNING_OPTION_RAW="$(json_field winning_option "${PREDICTION_JSON}")"
+  if [[ -z "${WINNING_OPTION_RAW}" || "${WINNING_OPTION_RAW}" == "null" ]]; then
+    echo "Prediction has not been settled yet or winning option is missing."
+    exit 1
+  fi
+  WINNING_OPTION="${WINNING_OPTION_RAW}"
 fi
 
 mkdir -p "${TMP_DIR}"
@@ -71,43 +94,98 @@ vote = ${VOTE}
 nonce = ${NONCE}
 EOF
 
-echo "[1/3] Generating claim proof inputs..."
+echo "[1/4] Preparing claim inputs"
 echo "Prediction ID: ${PREDICTION_ID}"
 echo "Slot: ${SLOT}"
 echo "Vote: ${VOTE}"
+echo "Nonce: ${NONCE}"
 echo "Winning option: ${WINNING_OPTION}"
-echo "Commitment: 0x${COMMITMENT}"
+echo "Local commitment: 0x${COMMITMENT}"
 
+echo "[2/4] Generating claim proof..."
 bash "${ROOT_DIR}/scripts/generate_proof_wsl.sh" "${PROVER_INPUT}" "${TMP_DIR}" "${TMP_DIR}/proof.bin"
 
-if [[ ! -f "${TMP_DIR}/proof.bin/proof" ]]; then
-  echo "Proof file not found"
+PROOF_BYTES_FILE="${TMP_DIR}/proof.bin/proof"
+PUBLIC_INPUTS_FILE="${TMP_DIR}/proof.bin/public_inputs"
+PROOF_HEX_FILE="${TMP_DIR}/proof.hex"
+
+if [[ ! -s "${PROOF_BYTES_FILE}" ]]; then
+  echo "Proof bytes file is empty: ${PROOF_BYTES_FILE}"
+  exit 1
+fi
+if [[ ! -s "${PUBLIC_INPUTS_FILE}" ]]; then
+  echo "Public inputs file is empty: ${PUBLIC_INPUTS_FILE}"
+  exit 1
+fi
+if [[ ! -s "${PROOF_HEX_FILE}" ]]; then
+  echo "Proof hex file is empty: ${PROOF_HEX_FILE}"
   exit 1
 fi
 
-PROOF_HEX="$(tr -d '\n' < "${TMP_DIR}/proof.hex")"
+PROOF_HEX="$(tr -d '\n' < "${PROOF_HEX_FILE}")"
+PROOF_PUBLIC_INPUTS_HEX="$(xxd -p -c 999999 "${PUBLIC_INPUTS_FILE}" | tr -d '\n')"
+PROOF_BYTES_LEN="$(wc -c < "${PROOF_BYTES_FILE}" | tr -d '[:space:]')"
+PUBLIC_INPUTS_LEN="$(wc -c < "${PUBLIC_INPUTS_FILE}" | tr -d '[:space:]')"
 
-if [[ -z "${CLAIM_SOURCE:-}" ]]; then
-  CLAIM_SOURCE="${IDENTITY}"
-fi
-
-if ! stellar keys address "${CLAIM_SOURCE}" >/dev/null 2>&1; then
-  echo "Claim source key '${CLAIM_SOURCE}' not found. Create or import it first."
-  exit 1
+if [[ "${CLAIM_DEBUG}" != "0" ]]; then
+  echo "[debug] proof bytes length: ${PROOF_BYTES_LEN}"
+  echo "[debug] public inputs length: ${PUBLIC_INPUTS_LEN}"
+  echo "[debug] proof hex length: ${#PROOF_HEX}"
 fi
 
 if [[ -n "${CHECK_COMMITMENT:-1}" ]]; then
-  echo "[2/3] Verifying on-chain commitment..."
-  stellar contract invoke \
+  echo "[3/4] Verifying on-chain commitment..."
+  COMMITMENT_JSON="$(stellar contract invoke \
     --id "${CONTRACT_ID}" \
     --source "${IDENTITY}" \
     --network "${NETWORK}" \
     -- get_commitment \
     --prediction_id "${PREDICTION_ID}" \
-    --slot "${SLOT}"
+    --slot "${SLOT}")"
+  echo "${COMMITMENT_JSON}"
+  ONCHAIN_COMMITMENT_RAW="$(json_field commitment "${COMMITMENT_JSON}")"
+  if [[ -z "${ONCHAIN_COMMITMENT_RAW}" ]]; then
+    echo "Failed to read on-chain commitment."
+    exit 1
+  fi
+  if [[ "${ONCHAIN_COMMITMENT_RAW}" != "${COMMITMENT}" ]]; then
+    echo "On-chain commitment mismatch."
+    echo "Local : ${COMMITMENT}"
+    echo "Chain : ${ONCHAIN_COMMITMENT_RAW}"
+    exit 1
+  fi
 fi
 
-echo "[3/3] Submitting claim_reward..."
+if [[ "${CLAIM_DEBUG}" != "0" ]]; then
+  PACKED_INPUTS_JSON="$(stellar contract invoke \
+    --id "${CONTRACT_ID}" \
+    --source "${IDENTITY}" \
+    --network "${NETWORK}" \
+    -- pack_claim_public_inputs_view \
+    --prediction_id "${PREDICTION_ID}" \
+    --slot "${SLOT}" \
+    --commitment "${ONCHAIN_COMMITMENT_RAW:-${COMMITMENT}}" \
+    --winning_option "${WINNING_OPTION}")"
+  PACKED_INPUTS_HEX="$(printf '%s' "${PACKED_INPUTS_JSON}" | tr -d '"[:space:]')"
+  echo "[debug] packed public inputs: ${PACKED_INPUTS_JSON}"
+  if [[ "${PROOF_PUBLIC_INPUTS_HEX}" != "${PACKED_INPUTS_HEX}" ]]; then
+    echo "Public inputs mismatch."
+    echo "Proof : ${PROOF_PUBLIC_INPUTS_HEX}"
+    echo "Chain : ${PACKED_INPUTS_HEX}"
+    exit 1
+  fi
+  VERIFY_RESULT="$(stellar contract invoke \
+    --id "${CONTRACT_ID}" \
+    --source "${IDENTITY}" \
+    --network "${NETWORK}" \
+    -- verify_proof \
+    --proof "${PROOF_HEX}" \
+    --public_inputs "${PROOF_PUBLIC_INPUTS_HEX}")"
+  echo "[debug] verify_proof result: ${VERIFY_RESULT}"
+  echo "[debug] invoking claim_reward with proof from ${PROOF_HEX_FILE}"
+fi
+
+echo "[4/4] Submitting claim_reward..."
 stellar contract invoke \
   --id "${CONTRACT_ID}" \
   --source "${CLAIM_SOURCE}" \
@@ -117,4 +195,5 @@ stellar contract invoke \
   --prediction_id "${PREDICTION_ID}" \
   --slot "${SLOT}" \
   --proof "${PROOF_HEX}"
+
 echo "Claim submitted."
