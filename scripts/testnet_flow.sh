@@ -79,8 +79,7 @@ stellar contract invoke \
   --option_a "${OPTION_A}" \
   --option_b "${OPTION_B}" \
   --deadline "${DEADLINE}" \
-  --reserve_price "${RESERVE_PRICE}" \
-  --pool_token "${POOL_TOKEN}" >/tmp/zkprediction_create_market.log 2>&1
+  --reserve_price "${RESERVE_PRICE}" >/tmp/zkprediction_create_market.log 2>&1
 
 PREDICTION_ID=1
 
