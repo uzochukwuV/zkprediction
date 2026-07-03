@@ -41,16 +41,15 @@ export async function verifyCommitment(commitment: string, choice: number, nonce
 }
 
 export function packPublicInputs(
-  predictionId: number,
-  slot: number,
   commitment: string,
   winningOption: number
 ): string {
+  // Contract expects: [commitment (32 bytes), winning_option (u64 padded to 32 bytes)]
+  // Note: prediction_id and slot are NOT public inputs - they're used to look up
+  // the stored commitment on-chain
   return (
     '0x' +
     [
-      toHex32(BigInt(predictionId)),
-      toHex32(BigInt(slot)),
       normalizeHex32(commitment),
       toHex32(BigInt(winningOption)),
     ].join('')
@@ -58,22 +57,13 @@ export function packPublicInputs(
 }
 
 export function unpackPublicInputs(data: string): {
-  predictionId: bigint;
-  slot: bigint;
   commitment: string;
   winningOption: bigint;
 } {
   const hex = data.replace(/^0x/, '');
-  let offset = 0;
-  const read = () => {
-    const part = hex.slice(offset, offset + 64);
-    offset += 64;
-    return part;
-  };
+  const read = () => hex.slice(0, 64);
   const readField = () => BigInt('0x' + read());
   return {
-    predictionId: readField(),
-    slot: readField(),
     commitment: '0x' + read(),
     winningOption: readField(),
   };
@@ -94,15 +84,13 @@ export async function commitmentFromVote(vote: number, nonce: string): Promise<s
 }
 
 export async function makeProofInputs(
-  predictionId: number,
-  slot: number,
   vote: number,
   nonce: string
 ): Promise<{ commitment: string; publicInputs: string }> {
   const commitment = await commitmentFromVote(vote, nonce);
   return {
     commitment,
-    publicInputs: packPublicInputs(predictionId, slot, commitment, vote),
+    publicInputs: packPublicInputs(commitment, vote),
   };
 }
 
@@ -134,11 +122,17 @@ export async function buildClaimProofInputs(
 }
 
 export function formatClaimProverToml(inputs: ClaimProofInputs): string {
+  // Note: prediction_id and slot are NOT public inputs
+  // They're used to look up the commitment on-chain
+  // The ZK circuit only sees: commitment, winning_option, vote, nonce
   return [
-    `prediction_id = ${inputs.predictionId}`,
-    `slot = ${inputs.slot}`,
+    `[verifier]`,
+    `# Public inputs (will be verified against contract storage)`,
     `commitment = "${inputs.commitment}"`,
     `winning_option = ${inputs.winningOption}`,
+    ``,
+    `[witness]`,
+    `# Private inputs (never revealed on-chain)`,
     `vote = ${inputs.vote}`,
     `nonce = "${inputs.nonce}"`,
   ].join('\n');

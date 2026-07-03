@@ -330,7 +330,9 @@ export default function MarketDetailClient({ marketId }: MarketDetailClientProps
           onBet={async (choice, amount, commitment) => {
             const bettor = useWalletStore.getState().address;
             if (!bettor) throw new Error('Connect a wallet first.');
-            const slot = await predictionContract.commitBet(bettor, prediction.id, amount, commitment, amount);
+            // commitBet: bettor, predictionId, amount, commitment
+            // The contract transfers 'amount' tokens from bettor to contract
+            const slot = await predictionContract.commitBet(bettor, prediction.id, amount, commitment);
             const updated = await predictionContract.getPrediction(prediction.id);
             addPrediction(updated);
             return slot;

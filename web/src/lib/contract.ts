@@ -17,7 +17,10 @@ export const MAINNET_CONFIG = {
 };
 
 export const CONTRACT_CONFIG = {
-  testnet: 'CC7Y3EYLPK77UYY2SJPMSW57FYKGYSAD2AY2JC5I25ATZUHJHNYGIJXQ',
+  // Deployed testnet contract with ZK proof verification
+  testnet: 'CCGZD3PTNY4F3EUC4Y4TMR25EYBU6FSS3HDQV7OUJNAWOCFXTLYOUQG7',
+  // SAC Token for payments
+  testnetToken: 'CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV',
   mainnet: '',
 };
 
@@ -173,12 +176,13 @@ function buildInvokeArgs(method: string, args: unknown[]): xdr.ScVal[] {
         nativeToScVal(args[6], { type: 'address' }),
       ];
     case 'commit_bet':
+      // Contract takes: bettor, prediction_id, amount, commitment
+      // Note: 'amount' is also the escrow amount (tokens transferred to contract)
       return [
         nativeToScVal(args[0], { type: 'address' }),
         nativeToScVal(BigInt(args[1] as bigint | number), { type: 'u64' }),
         nativeToScVal(args[2], { type: 'i128' }),
         nativeToScVal(normalizeBytesInput(args[3] as string | Uint8Array | Buffer), { type: 'bytes' }),
-        nativeToScVal(args[4], { type: 'i128' }),
       ];
     case 'close_betting':
       return [nativeToScVal(BigInt(args[0] as bigint | number), { type: 'u64' })];
@@ -319,13 +323,15 @@ export class PredictionContract {
     bettor: string,
     predictionId: number,
     amount: bigint,
-    commitment: string,
-    escrowAmount: bigint
+    commitment: string
   ): Promise<number> {
+    // commitment: hash(choice, nonce) - 32 bytes hex or Buffer
+    // The contract uses require_auth() to authorize the bettor
+    // and transfers 'amount' tokens from bettor to contract
     var result = await invokeContractCall<unknown>({
       network: this.network,
       method: 'commit_bet',
-      args: [bettor, BigInt(predictionId), BigInt(amount), normalizeBytesInput(commitment), BigInt(escrowAmount)],
+      args: [bettor, BigInt(predictionId), BigInt(amount), normalizeBytesInput(commitment)],
     });
     console.log(result)
     return asNumber(result);

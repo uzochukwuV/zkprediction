@@ -322,3 +322,286 @@ stellar contract invoke --source bettor1 --network testnet \
 
 ### Recommendation
 **Use SAC for production** - It has better ecosystem support and the full approve/transfer_from flow works correctly.
+
+---
+
+## V2 IMPROVEMENTS: Roadmap for Production
+
+### Issues Identified in V1
+
+#### 1. Security Issues
+
+| Issue | Severity | Current State | Fix Required |
+|-------|----------|--------------|-------------|
+| `close_betting` has no deadline check | **HIGH** | Anyone can close betting anytime | Add: `assert(env.ledger().timestamp() >= prediction.params.deadline)` |
+| `settle` doesn't verify Closed status | **HIGH** | Can settle without closing | Add: `assert(matches!(prediction.status, PredictionStatus::Closed))` |
+| `reserve_price` is stored but never enforced | **MEDIUM** | Minimum bet not validated | Add: `assert(amount >= prediction.params.reserve_price)` |
+| No admin change function | **LOW** | Admin locked forever | Add: `set_admin(new_admin)` with require_auth |
+
+#### 2. Missing Features
+
+| Feature | Priority | Description |
+|---------|----------|-------------|
+| Bet deadline enforcement | **HIGH** | Cannot bet after deadline |
+| Event subscriptions | **MEDIUM** | Frontend needs real-time updates |
+| Batch prediction queries | **MEDIUM** | No way to list all predictions |
+| Emergency withdrawal | **HIGH** | Users can't recover funds if contract has bug |
+
+#### 3. Testing Gaps
+
+| Issue | Current | Fix |
+|-------|---------|-----|
+| Placeholder test | `placeholder()` only | Add comprehensive tests with mock token/verifier |
+| No integration tests | Only manual testing | Add full flow tests |
+| No edge case tests | Not covered | Test boundary conditions |
+
+#### 4. ZK Circuit Issues
+
+| Issue | Description |
+|-------|-------------|
+| Proof is pre-generated | Must regenerate proof for each new commitment |
+| Commitment must match circuit | Frontend uses Poseidon, must match Noir circuit |
+| VK deployed with contract | If VK changes, contract must be redeployed |
+
+### V2 Implementation Plan
+
+#### Phase 1: Security Fixes
+
+```rust
+// 1. Add deadline check to commit_bet
+pub fn commit_bet(...) {
+    // ... existing code ...
+    assert!(
+        env.ledger().timestamp() < prediction.params.deadline,
+        "Betting has closed"
+    );
+    assert!(
+        amount >= prediction.params.reserve_price,
+        "Below minimum bet"
+    );
+}
+
+// 2. Add status check to settle
+pub fn settle(...) {
+    let prediction = get_prediction(&env, prediction_id);
+    assert!(
+        matches!(prediction.status, PredictionStatus::Closed),
+        "Prediction not closed"
+    );
+    // ... rest of code ...
+}
+
+// 3. Add deadline check to close_betting
+pub fn close_betting(env: Env, prediction_id: u64) -> bool {
+    let prediction = get_prediction(&env, prediction_id);
+    assert!(
+        env.ledger().timestamp() >= prediction.params.deadline,
+        "Deadline not reached"
+    );
+    // ... rest ...
+}
+```
+
+#### Phase 2: Missing Features
+
+```rust
+// Add admin change function
+pub fn set_admin(env: Env, new_admin: Address) {
+    let current_admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+    current_admin.require_auth();
+    env.storage().instance().set(&DataKey::Admin, &new_admin);
+}
+
+// Add emergency withdrawal (only for closed predictions without winners)
+pub fn emergency_withdraw(env: Env, prediction_id: u64) {
+    let prediction = get_prediction(&env, prediction_id);
+    assert!(matches!(prediction.status, PredictionStatus::Settled), "Not settled");
+    // Only allow if no one claimed and deadline passed
+    // Complex logic - consider carefully
+}
+
+// Add get_predictions (batch query)
+pub fn get_predictions(env: Env, start_id: u64, limit: u32) -> Vec<Prediction> {
+    // Return array of predictions for listing
+}
+```
+
+#### Phase 3: Testing Infrastructure
+
+```rust
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::testutils::*;
+    
+    fn create_token() -> MockTokenClient {
+        // Create mock token for testing
+    }
+    
+    fn create_verifier() -> MockVerifier {
+        // Create mock ZK verifier
+    }
+    
+    #[test]
+    fn test_create_prediction() {
+        // Full test with mock dependencies
+    }
+    
+    #[test]
+    fn test_commit_bet_respects_deadline() {
+        // Verify betting closes at deadline
+    }
+    
+    #[test]
+    fn test_settle_requires_closed_status() {
+        // Verify settle only works after close
+    }
+}
+```
+
+#### Phase 4: Frontend Improvements
+
+```typescript
+// 1. Add deadline validation
+const timeRemaining = getTimeRemaining(prediction.params.deadline);
+if (timeRemaining.expired) {
+  showError("Betting has closed");
+}
+
+// 2. Add minimum bet validation
+if (amount < prediction.params.reservePrice) {
+  showError(`Minimum bet: ${formatAmount(reservePrice)}`);
+}
+
+// 3. Add real-time updates via contract events
+contract.events().subscribe('bet.committed', handleNewBet);
+contract.events().subscribe('prediction.closed', handleClosed);
+contract.events().subscribe('prediction.claimed', handleClaimed);
+```
+
+#### Phase 5: DevOps Improvements
+
+```bash
+# 1. Add circuit regeneration script
+#!/bin/bash
+# scripts/regenerate-proof.sh
+set -e
+
+PREDICTION_ID=$1
+SLOT=$2
+VOTE=$3
+NONCE=$4
+WINNING_OPTION=$5
+
+# Update Prover.toml with new witness values
+cat > circuits/prediction_settle/Prover.toml << EOF
+[verification]
+commitment = "${COMMITMENT}"
+winning_option = ${WINNING_OPTION}
+
+[witness]
+vote = ${VOTE}
+nonce = "${NONCE}"
+EOF
+
+# Regenerate proof
+cd circuits/prediction_settle
+nargo prove -p claim
+
+# Copy to known location
+cp target/claim/proof.bin ../web/public/proofs/prediction_${PREDICTION_ID}_slot_${SLOT}.bin
+
+# 2. Add deployment verification script
+stellar contract invoke --id $CONTRACT_ID -- get_vk_hash
+# Verify matches expected VK hash
+```
+
+### Circuit V2 Improvements
+
+#### Current Circuit (V1)
+```noir
+fn main(
+    commitment: pub Field,
+    winning_option: pub u32,
+    vote: u32,
+    nonce: Field,
+) {
+    let expected = poseidon::hash_2([vote as Field, nonce]);
+    assert(commitment == expected);
+    assert(vote == winning_option);
+}
+```
+
+#### Proposed Circuit (V2)
+
+```noir
+// Add Merkle proof for prediction lookup
+// Add range checks for vote (must be 0 or 1)
+// Add nullifier to prevent double-claiming
+// Add prediction ID to prevent cross-prediction claims
+
+global OPTION_A: u32 = 0;
+global OPTION_B: u32 = 1;
+global MAX_PREDICTION_ID: u64 = 10000;
+
+fn main(
+    // Public inputs
+    commitment: pub Field,
+    winning_option: pub u32,
+    prediction_id: pub u64,  // NEW: prevent cross-prediction
+    nullifier: pub Field,    // NEW: prevent double-claim
+    
+    // Private inputs  
+    vote: u32,
+    nonce: Field,
+    
+    // NEW: Merkle proof for commitment existence
+    proof_elements: [Field; 10],
+    proof_path: [u8; 10],
+) {
+    // Validate vote range
+    assert(vote == OPTION_A | vote == OPTION_B);
+    
+    // Validate prediction ID range
+    assert(prediction_id < MAX_PREDICTION_ID);
+    
+    // Verify commitment
+    let expected = poseidon::hash_2([vote as Field, nonce]);
+    assert(commitment == expected);
+    
+    // Verify vote matches winning option
+    assert(vote == winning_option);
+    
+    // NEW: Verify nullifier uniqueness
+    let expected_nullifier = poseidon::hash_2([
+        prediction_id as Field,
+        commitment,
+        nonce
+    ]);
+    assert(nullifier == expected_nullifier);
+}
+```
+
+### Testing Checklist for V2
+
+- [ ] `commit_bet` fails after deadline
+- [ ] `commit_bet` fails if below reserve_price
+- [ ] `settle` fails if prediction not Closed
+- [ ] `close_betting` fails if before deadline
+- [ ] `claim_reward` fails with wrong proof
+- [ ] `claim_reward` fails if already claimed
+- [ ] `claim_reward` fails if not winner
+- [ ] Multiple claims from same slot blocked
+- [ ] Token transfers work correctly
+- [ ] Events emit correctly
+
+### Deployment Checklist for V2
+
+1. Generate fresh VK and proof
+2. Deploy contract with new VK
+3. Verify VK hash matches proof
+4. Test full flow with test accounts
+5. Audit ZK circuit for vulnerabilities
+6. Review smart contract for reentrancy
+7. Add upgrade mechanism (optional)
+
