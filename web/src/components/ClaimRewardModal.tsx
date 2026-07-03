@@ -48,12 +48,11 @@ export default function ClaimRewardModal({ prediction, bet, isOpen, onClose, onM
 
         setCommitment(inputs.commitment);
         setProofInputs(formatClaimProverToml(inputs));
+        // Public inputs for the ZK circuit (only commitment and winning_option)
         setPublicInputs(
           [
-            `prediction_id = ${inputs.predictionId}`,
-            `slot = ${inputs.slot}`,
-            `commitment = ${inputs.commitment}`,
-            `winning_option = ${inputs.winningOption}`,
+            `0x${inputs.commitment.replace('0x', '')}`,
+            `0x${BigInt(inputs.winningOption).toString(16).padStart(64, '0')}`,
           ].join('\n')
         );
       } catch (e) {
