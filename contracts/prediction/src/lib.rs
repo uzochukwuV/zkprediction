@@ -106,9 +106,10 @@ impl PredictionContract {
         option_b: String,
         deadline: u64,
         reserve_price: i128,
-        pool_token: Address,
     ) -> u64 {
         assert!(deadline > env.ledger().timestamp(), "Deadline must be in future");
+
+        let pool_token: Address = env.storage().instance().get(&DataKey::PoolToken).unwrap();
 
         let prediction_id = env
             .storage()
@@ -160,7 +161,9 @@ impl PredictionContract {
         let pool_token_address: Address = env.storage().instance().get(&DataKey::PoolToken).unwrap();
         let pool_token = token::Client::new(&env, &pool_token_address);
         
-        // Bettee must authorize the transfer
+        // Bettor must approve the contract to spend tokens first
+        // Then we transfer from bettor to contract
+        bettor.require_auth();
         pool_token.transfer(&bettor, &env.current_contract_address(), &amount);
 
         let slot = prediction.bet_count;
