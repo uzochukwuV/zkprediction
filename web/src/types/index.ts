@@ -74,6 +74,7 @@ export interface ZKProof {
 
 export interface ContractConfig {
   contractId: string;
+  tokenId?: string;  // SAC token for payments
   network: 'testnet' | 'mainnet';
   rpcUrl: string;
 }

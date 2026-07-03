@@ -68,7 +68,10 @@ export const useConfigStore = create<ConfigStore>()(
   persist(
     (set) => ({
       config: {
-        contractId: 'CC7Y3EYLPK77UYY2SJPMSW57FYKGYSAD2AY2JC5I25ATZUHJHNYGIJXQ',
+        // Deployed ZK prediction contract on testnet
+        contractId: 'CCGZD3PTNY4F3EUC4Y4TMR25EYBU6FSS3HDQV7OUJNAWOCFXTLYOUQG7',
+        // SAC Token for testnet
+        tokenId: 'CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV',
         network: 'testnet',
         rpcUrl: 'https://soroban-testnet.stellar.org:443',
       },
