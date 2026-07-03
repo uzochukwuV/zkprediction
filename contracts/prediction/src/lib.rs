@@ -14,7 +14,7 @@ use soroban_sdk::{
 };
 
 mod verification;
-use verification::{UltraHonkVerifier, VkLoadError, PROOF_BYTES};
+pub use verification::{UltraHonkVerifier, PROOF_BYTES};
 
 const MAX_BETS: u32 = 16;
 
@@ -233,13 +233,10 @@ impl PredictionContract {
 
         let verifier = match UltraHonkVerifier::new(env, &vk_bytes) {
             Ok(verifier) => verifier,
-            Err(err) => match err {
-                VkLoadError::WrongLength => panic!("VK parse error: wrong length"),
-                VkLoadError::InvalidParameters => panic!("VK parse error: invalid parameters"),
-            },
+            Err(_) => return false,
         };
 
-        verifier.verify(env, &proof, &public_inputs).is_ok()
+        verifier.verify(&proof, &public_inputs).is_ok()
     }
 
     pub fn claim_reward(

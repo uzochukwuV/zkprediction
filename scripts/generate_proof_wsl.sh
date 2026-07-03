@@ -4,8 +4,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CIRCUIT_DIR="${ROOT_DIR}/circuits/prediction_settle"
 INPUT_FILE="${1:-${CIRCUIT_DIR}/Prover.toml}"
-OUT_DIR="${2:-${CIRCUIT_DIR}/target}"
+OUT_DIR="${2:-${CIRCUIT_DIR}/target/claim}"
 PROOF_DIR="${3:-${OUT_DIR}/proof.bin}"
+VK_DIR="${4:-${OUT_DIR}/vk}"
 
 if ! grep -qi microsoft /proc/version 2>/dev/null; then
   echo "This script is intended to run in WSL."
@@ -32,8 +33,6 @@ fi
 
 if [[ ! -f "${INPUT_FILE}" ]]; then
   cat > "${INPUT_FILE}" <<'EOF'
-prediction_id = 1
-slot = 0
 commitment = "0x01a4c3379fa3f6d0dc0fb702d88c4506ab603e8022bfbe58e68dbd2505d7abc3"
 winning_option = 0
 vote = 0
@@ -44,7 +43,7 @@ EOF
   exit 0
 fi
 
-mkdir -p "${OUT_DIR}"
+mkdir -p "${OUT_DIR}" "${PROOF_DIR}" "${VK_DIR}"
 INPUT_REAL="$(readlink -f "${INPUT_FILE}")"
 PROVER_REAL="$(readlink -f "${CIRCUIT_DIR}/Prover.toml")"
 if [[ "${INPUT_REAL}" != "${PROVER_REAL}" ]]; then
@@ -53,8 +52,10 @@ fi
 
 pushd "${CIRCUIT_DIR}" >/dev/null
 
-echo "[1/2] Executing circuit to generate witness..."
+echo "[1/3] Compiling circuit..."
 "${NARGO_BIN}" compile
+
+echo "[2/3] Generating witness..."
 "${NARGO_BIN}" execute
 
 WITNESS_FILE="${CIRCUIT_DIR}/target/prediction_settle.gz"
@@ -64,23 +65,23 @@ if [[ ! -f "${WITNESS_FILE}" ]]; then
   exit 1
 fi
 
-cp "${WITNESS_FILE}" "${OUT_DIR}/prediction_settle.gz"
 if [[ -f "${CIRCUIT_DIR}/target/prediction_settle.json" ]]; then
   cp "${CIRCUIT_DIR}/target/prediction_settle.json" "${OUT_DIR}/prediction_settle.json"
 fi
-if [[ -d "${CIRCUIT_DIR}/target/vk" ]]; then
-  mkdir -p "${OUT_DIR}/vk"
-  cp -R "${CIRCUIT_DIR}/target/vk/"* "${OUT_DIR}/vk/" 2>/dev/null || true
-fi
 
-echo "[2/2] Generating proof..."
+echo "[3/3] Generating VK and proof..."
+"${BB_BIN}" write_vk \
+  -s ultra_honk \
+  --oracle_hash keccak \
+  -b "${CIRCUIT_DIR}/target/prediction_settle.json" \
+  -o "${VK_DIR}"
+
 "${BB_BIN}" prove \
-  --scheme ultra_honk \
+  -s ultra_honk \
   --oracle_hash keccak \
   --bytecode_path "${CIRCUIT_DIR}/target/prediction_settle.json" \
   --witness_path "${WITNESS_FILE}" \
-  --output_path "${PROOF_DIR}" \
-  --output_format bytes_and_fields
+  --output_path "${PROOF_DIR}"
 
 if [[ -f "${PROOF_DIR}/proof" ]]; then
   PROOF_PATH="${PROOF_DIR}/proof"
@@ -90,9 +91,11 @@ else
   echo "Expected proof bytes not found in ${PROOF_DIR}"
   exit 1
 fi
+
 xxd -p -c 999999 "${PROOF_PATH}" | tr -d '\n' > "${OUT_DIR}/proof.hex"
 
-echo "Proof written to: ${PROOF_DIR}"
+echo "VK written to: ${VK_DIR}/vk"
+echo "Proof written to: ${PROOF_DIR}/proof"
 echo "Hex proof written to: ${OUT_DIR}/proof.hex"
 
 popd >/dev/null

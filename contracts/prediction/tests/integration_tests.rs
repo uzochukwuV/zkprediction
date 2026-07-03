@@ -9,9 +9,8 @@ mod prediction_contract {
 const VK_BYTES: &[u8] = include_bytes!("../../../circuits/prediction_settle/target/claim/vk/vk");
 const PROOF_BYTES: &[u8] =
     include_bytes!("../../../circuits/prediction_settle/target/claim/proof.bin/proof");
-const PUBLIC_INPUTS_BYTES: &[u8] = include_bytes!(
-    "../../../circuits/prediction_settle/target/claim/proof.bin/public_inputs"
-);
+const PUBLIC_INPUTS_BYTES: &[u8] =
+    include_bytes!("../../../circuits/prediction_settle/target/claim/proof.bin/public_inputs");
 
 fn register_client(env: &Env) -> prediction_contract::Client<'_> {
     let admin = Address::generate(env);

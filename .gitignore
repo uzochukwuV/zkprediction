@@ -6,7 +6,6 @@ target/
 .DS_Store
 .env
 node_modules/
-yugocabrio-rs-soroban-ultrahonk/
 ultrahonk_soroban_contract/
 soroban-examples/
 zkauction/
