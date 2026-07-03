@@ -1,120 +1,125 @@
-'use client';
+﻿'use client';
 
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { useState } from 'react';
+import { ChevronDown, Copy, ExternalLink, LogOut, Wallet } from 'lucide-react';
 import { useWalletStore } from '@/lib/store';
 import { formatStellarAddress } from '@/lib/wallet';
-import { Wallet, ChevronDown, LogOut, Copy, ExternalLink } from 'lucide-react';
-import { useState } from 'react';
 
 export default function Header() {
+  const pathname = usePathname();
   const { address, isConnected, isConnecting, connect, disconnect } = useWalletStore();
   const [showDropdown, setShowDropdown] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const handleCopy = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
+  const handleCopy = async () => {
+    if (!address) return;
+    await navigator.clipboard.writeText(address);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
   };
 
-  const handleDisconnect = () => {
-    disconnect();
-    setShowDropdown(false);
-  };
+  const navItems = [
+    { href: '/', label: 'Browse' },
+    { href: '/#markets', label: 'Markets' },
+    { href: '/#create', label: 'Create' },
+  ];
 
   return (
-    <header className="bg-dark-200 border-b border-gray-800 sticky top-0 z-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-secondary-500 flex items-center justify-center">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold text-white">zkPrediction</h1>
-              <p className="text-xs text-gray-400">Minority Wins Market</p>
-            </div>
+    <header className="sticky top-0 z-50 bg-dark-300/90 backdrop-blur-sm">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-primary-500 text-white">
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M12 2L22 20H2L12 2Z" stroke="currentColor" strokeWidth="1.6" />
+            </svg>
           </div>
-
-          {/* Network Badge */}
-          <div className="hidden sm:block">
-            <span className="px-3 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
-              Testnet
-            </span>
+          <div>
+            <div className="font-display text-xl text-white">zkPrediction</div>
+            <div className="font-label text-[11px] text-ash-gray">Outcome-based market</div>
           </div>
+        </Link>
 
-          {/* Wallet Connection */}
-          <div className="relative">
-            {isConnected && address ? (
-              <div className="relative">
-                <button
-                  onClick={() => setShowDropdown(!showDropdown)}
-                  className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-dark-100 border border-gray-700 hover:border-primary-500 transition-colors"
-                >
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-400 to-secondary-400 flex items-center justify-center">
-                    <span className="text-white text-sm font-medium">
-                      {address.slice(0, 2)}
-                    </span>
-                  </div>
-                  <span className="text-white font-medium">
-                    {formatStellarAddress(address)}
-                  </span>
-                  <ChevronDown className="w-4 h-4 text-gray-400" />
-                </button>
-
-                {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-56 rounded-xl bg-dark-100 border border-gray-700 shadow-xl py-2">
-                    <div className="px-4 py-2 border-b border-gray-700">
-                      <p className="text-xs text-gray-400">Connected Wallet</p>
-                      <p className="text-sm text-white font-mono mt-1">
-                        {formatStellarAddress(address, 8)}
-                      </p>
-                    </div>
-                    <div className="py-2">
-                      <button
-                        onClick={handleCopy}
-                        className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-800 flex items-center space-x-2"
-                      >
-                        <Copy className="w-4 h-4" />
-                        <span>{copied ? 'Copied!' : 'Copy Address'}</span>
-                      </button>
-                      <a
-                        href={`https://stellar.expert/explorer/testnet/account/${address}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="w-full px-4 py-2 text-left text-sm text-gray-300 hover:bg-gray-800 flex items-center space-x-2"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                        <span>View on Explorer</span>
-                      </a>
-                    </div>
-                    <div className="border-t border-gray-700 pt-2">
-                      <button
-                        onClick={handleDisconnect}
-                        className="w-full px-4 py-2 text-left text-sm text-red-400 hover:bg-gray-800 flex items-center space-x-2"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>Disconnect</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <button
-                onClick={connect}
-                disabled={isConnecting}
-                className="flex items-center space-x-2 px-6 py-2 rounded-xl bg-gradient-to-r from-primary-600 to-secondary-600 text-white font-medium hover:from-primary-500 hover:to-secondary-500 transition-all disabled:opacity-50"
+        <nav className="hidden items-center gap-7 md:flex">
+          {navItems.map((item) => {
+            const active = pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`font-label text-sm transition-colors ${active ? 'text-white' : 'text-ash-gray hover:text-white'}`}
               >
-                <Wallet className="w-5 h-5" />
-                <span>{isConnecting ? 'Connecting...' : 'Connect Wallet'}</span>
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+
+        <div className="relative flex items-center gap-3">
+          <span className="hidden rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.25em] text-silver-mist sm:inline-flex">
+            Testnet
+          </span>
+
+          {isConnected && address ? (
+            <div className="relative">
+              <button
+                onClick={() => setShowDropdown((value) => !value)}
+                className="inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-black transition-transform hover:-translate-y-0.5"
+              >
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-dark-300 text-xs text-white">
+                  {address.slice(0, 2)}
+                </span>
+                <span className="hidden sm:inline">{formatStellarAddress(address)}</span>
+                <ChevronDown className="h-4 w-4" />
               </button>
-            )}
-          </div>
+
+              {showDropdown && (
+                <div className="absolute right-0 mt-3 w-72 rounded-3xl bg-dark-200 p-4 text-white shadow-2xl shadow-black/40 ring-1 ring-white/10">
+                  <p className="font-label text-[11px] text-ash-gray">Connected wallet</p>
+                  <p className="mt-1 break-all text-sm text-white">{address}</p>
+
+                  <div className="mt-4 flex flex-col gap-2">
+                    <button
+                      onClick={handleCopy}
+                      className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-left text-sm text-silver-mist hover:bg-white/10"
+                    >
+                      <Copy className="h-4 w-4" />
+                      <span>{copied ? 'Copied' : 'Copy address'}</span>
+                    </button>
+                    <a
+                      href={`https://stellar.expert/explorer/testnet/account/${address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-sm text-silver-mist hover:bg-white/10"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                      <span>View on explorer</span>
+                    </a>
+                    <button
+                      onClick={() => {
+                        disconnect();
+                        setShowDropdown(false);
+                      }}
+                      className="flex items-center gap-2 rounded-full bg-white/5 px-3 py-2 text-sm text-saffron-spark hover:bg-white/10"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      <span>Disconnect</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <button
+              onClick={connect}
+              disabled={isConnecting}
+              className="inline-flex items-center gap-2 rounded-full bg-primary-500 px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Wallet className="h-4 w-4" />
+              <span>{isConnecting ? 'Connecting...' : 'Connect Wallet'}</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

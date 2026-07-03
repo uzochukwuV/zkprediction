@@ -1,132 +1,104 @@
-#!/bin/bash
-# =============================================================================
-# zkPrediction - Deployment Script for Stellar Testnet
-# =============================================================================
-# This script deploys the prediction market contract to Stellar testnet.
-#
-# Prerequisites:
-#   - Stellar CLI installed
-#   - Rust toolchain
-#   - Nargo (Noir compiler)
-#   - Barretenberg (bb)
-#
-# Usage:
-#   ./scripts/deploy_testnet.sh
-# =============================================================================
+#!/usr/bin/env bash
+set -euo pipefail
 
-set -e
-
-# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  zkPrediction Deployment Script${NC}"
-echo -e "${GREEN}  Minority Wins Prediction Market${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo ""
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Check if stellar CLI is installed
-if ! command -v stellar &> /dev/null; then
-    echo -e "${RED}Error: Stellar CLI not found. Install from: https://github.com/stellar/rs-stellar-cli${NC}"
-    exit 1
+if [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
+  if command -v wsl.exe >/dev/null 2>&1; then
+    if command -v cygpath >/dev/null 2>&1; then
+      WSL_ROOT="$(cygpath -u "$ROOT_DIR")"
+    else
+      WSL_ROOT="$(wslpath "$ROOT_DIR")"
+    fi
+    exec wsl bash -lc "cd '$WSL_ROOT' && bash scripts/deploy_testnet.sh"
+  fi
+  echo -e "${RED}Error: this deployment script must run in WSL.${NC}"
+  exit 1
 fi
 
-# Configuration
+if ! command -v stellar &> /dev/null; then
+  echo -e "${RED}Error: Stellar CLI not found. Install from: https://github.com/stellar/rs-stellar-cli${NC}"
+  exit 1
+fi
+
+NARGO_BIN="$(command -v nargo 2>/dev/null || true)"
+if [[ -z "${NARGO_BIN}" && -x "/home/vic/.nargo/bin/nargo" ]]; then
+  NARGO_BIN="/home/vic/.nargo/bin/nargo"
+fi
+if [[ -z "${NARGO_BIN}" ]]; then
+  echo -e "${RED}Error: nargo not found.${NC}"
+  exit 1
+fi
+
+BB_BIN="$(command -v bb 2>/dev/null || true)"
+if [[ -z "${BB_BIN}" && -x "/home/vic/.bb/bb" ]]; then
+  BB_BIN="/home/vic/.bb/bb"
+fi
+if [[ -z "${BB_BIN}" ]]; then
+  echo -e "${RED}Error: bb not found.${NC}"
+  exit 1
+fi
+
 NETWORK="testnet"
 NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
 RPC_URL="https://soroban-testnet.stellar.org:443"
 IDENTITY="deployer"
 
-echo -e "${YELLOW}Configuration:${NC}"
-echo "  Network: $NETWORK"
-echo "  Identity: $IDENTITY"
-echo "  RPC: $RPC_URL"
+cd "$(dirname "$0")/.."
+
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}  zkPrediction Deployment Script${NC}"
+echo -e "${GREEN}  Outcome Based Prediction Market${NC}"
+echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# Step 1: Configure network
 echo -e "${YELLOW}[1/5] Configuring network...${NC}"
-stellar network add $NETWORK \
-    --rpc-url "$RPC_URL" \
-    --network-passphrase "$NETWORK_PASSPHRASE" \
-    2>/dev/null || echo "Network already configured"
-echo -e "${GREEN}✓ Network configured${NC}"
-echo ""
+stellar network add $NETWORK --rpc-url "$RPC_URL" --network-passphrase "$NETWORK_PASSPHRASE" 2>/dev/null || true
 
-# Step 2: Setup identity
 echo -e "${YELLOW}[2/5] Setting up identity...${NC}"
 if ! stellar keys ls 2>/dev/null | grep -q "$IDENTITY"; then
-    echo "Creating new identity: $IDENTITY"
-    stellar keys generate $IDENTITY --network $NETWORK
-    stellar keys fund $IDENTITY --network $NETWORK
-else
-    echo "Identity '$IDENTITY' already exists"
+  stellar keys generate $IDENTITY --network $NETWORK
+  stellar keys fund $IDENTITY --network $NETWORK
 fi
-echo -e "${GREEN}✓ Identity ready${NC}"
-echo ""
 
-# Step 3: Build contract
 echo -e "${YELLOW}[3/5] Building Soroban contract...${NC}"
-cd "$(dirname "$0")/.."
 stellar contract build --manifest-path contracts/prediction/Cargo.toml
-echo -e "${GREEN}✓ Contract built${NC}"
-echo ""
 
-# Step 4: Compile Noir circuit
 echo -e "${YELLOW}[4/5] Compiling Noir circuit...${NC}"
 cd circuits/prediction_settle
-nargo compile
-echo -e "${GREEN}✓ Circuit compiled${NC}"
-echo ""
+"${NARGO_BIN}" compile
 
-# Step 5: Generate verification key
 echo -e "${YELLOW}[5/5] Generating verification key...${NC}"
+mkdir -p target/vk
+"${BB_BIN}" write_vk -b target/prediction_settle.json -o target/vk --verifier_target noir-recursive
+VK_HASH_HEX="$(xxd -p -c 999999 target/vk/vk_hash | tr -d '\n')"
+
 cd ../..
-mkdir -p circuits/prediction_settle/target/vk
-bb write_vk \
-    -b circuits/prediction_settle/target/prediction_settle.json \
-    -o circuits/prediction_settle/target/vk \
-    --verifier_target noir-recursive
-echo -e "${GREEN}✓ Verification key generated${NC}"
-echo ""
 
-# Calculate VK hash
-echo -e "${YELLOW}Computing VK hash...${NC}"
-VK_HASH=$(cat circuits/prediction_settle/target/vk/vk_hash)
-echo "VK Hash: $VK_HASH"
-echo ""
-
-# Deploy contract
 echo -e "${YELLOW}Deploying contract...${NC}"
 CONTRACT_ID=$(stellar contract deploy \
-    --wasm contracts/prediction/target/wasm32v1-none/release/prediction.wasm \
-    --source $IDENTITY \
-    --network $NETWORK \
-    -- --admin $(stellar keys address $IDENTITY) \
-    --vk_hash $VK_HASH)
+  --wasm target/wasm32v1-none/release/prediction.wasm \
+  --source $IDENTITY \
+  --network $NETWORK \
+  -- --admin $(stellar keys address $IDENTITY) \
+  --vk_hash $VK_HASH_HEX)
 
-echo ""
-echo -e "${GREEN}========================================${NC}"
-echo -e "${GREEN}  Deployment Successful!${NC}"
-echo -e "${GREEN}========================================${NC}"
-echo ""
-echo "Contract ID: $CONTRACT_ID"
-echo "WASM Hash: $(sha256sum contracts/prediction/target/wasm32v1-none/release/prediction.wasm | cut -d' ' -f1)"
-echo ""
-echo "Save these values for frontend configuration!"
-echo ""
-
-# Save deployment info
 cat > .deployment.json << EOF
 {
-    "network": "$NETWORK",
-    "contract_id": "$CONTRACT_ID",
-    "vk_hash": "$VK_HASH",
-    "wasm_hash": "$(sha256sum contracts/prediction/target/wasm32v1-none/release/prediction.wasm | cut -d' ' -f1)",
-    "deployed_at": "$(date -Iseconds)"
+  "network": "$NETWORK",
+  "contract_id": "$CONTRACT_ID",
+  "vk_hash": "$VK_HASH_HEX",
+  "wasm_hash": "$(sha256sum target/wasm32v1-none/release/prediction.wasm | cut -d' ' -f1)",
+  "deployed_at": "$(date -Iseconds)"
 }
 EOF
 
-echo -e "${GREEN}Deployment info saved to .deployment.json${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}  Deployment Successful!${NC}"
+echo -e "${GREEN}========================================${NC}"
+echo "Contract ID: $CONTRACT_ID"

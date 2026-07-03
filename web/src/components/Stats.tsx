@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, Users, Clock, Shield, Zap, Lock } from 'lucide-react';
+import { TrendingUp, Shield, Zap, Lock } from 'lucide-react';
 
 const features = [
   {
@@ -10,18 +10,18 @@ const features = [
   },
   {
     icon: <TrendingUp className="w-6 h-6" />,
-    title: 'Minority Wins',
-    description: 'Contrarian bets pay big. The less popular option wins the entire pool!',
+    title: 'Outcome Claims',
+    description: 'Only users who committed to the settled answer can claim reward.',
   },
   {
     icon: <Zap className="w-6 h-6" />,
     title: 'ZK Verified',
-    description: 'All settlements are mathematically proven using zero-knowledge proofs.',
+    description: 'Claims are proven with zero-knowledge proofs.',
   },
   {
     icon: <Lock className="w-6 h-6" />,
     title: 'Secure Escrow',
-    description: 'Funds are locked until ZK-verified settlement ensures fair distribution.',
+    description: 'Funds remain locked until settlement and claim verification.',
   },
 ];
 
@@ -34,25 +34,18 @@ export default function Features() {
             How <span className="gradient-text">zkPrediction</span> Works
           </h2>
           <p className="text-gray-400 max-w-2xl mx-auto">
-            A new kind of prediction market where being contrarian pays off.
+            A private prediction market where correct outcomes are proven, not revealed.
           </p>
         </div>
-        
+
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {features.map((feature, index) => (
-            <div
-              key={index}
-              className="bg-dark-100 rounded-2xl p-6 border border-gray-800 hover:border-primary-500/50 transition-all group"
-            >
+            <div key={index} className="bg-dark-100 rounded-2xl p-6 border border-gray-800 hover:border-primary-500/50 transition-all group">
               <div className="w-12 h-12 rounded-xl bg-primary-500/10 text-primary-400 flex items-center justify-center mb-4 group-hover:bg-primary-500/20 transition-colors">
                 {feature.icon}
               </div>
-              <h3 className="text-lg font-semibold text-white mb-2">
-                {feature.title}
-              </h3>
-              <p className="text-sm text-gray-400">
-                {feature.description}
-              </p>
+              <h3 className="text-lg font-semibold text-white mb-2">{feature.title}</h3>
+              <p className="text-sm text-gray-400">{feature.description}</p>
             </div>
           ))}
         </div>

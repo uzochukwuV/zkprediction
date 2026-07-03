@@ -1,32 +1,51 @@
 // Wallet connection utilities for Freighter, Albedo, and other Stellar wallets
 
+import { getAddress, isConnected, requestAccess, signTransaction } from '@stellar/freighter-api';
+
+function getNetworkPassphrase(network: string): string {
+  const normalized = network.toLowerCase();
+  if (normalized === 'testnet') {
+    return 'Test SDF Network ; September 2015';
+  }
+
+  if (normalized === 'mainnet' || normalized === 'public') {
+    return 'Public Global Stellar Network ; September 2015';
+  }
+
+  return network;
+}
+
 // Check if Freighter is available
 export async function isFreighterAvailable(): Promise<boolean> {
   if (typeof window === 'undefined') return false;
-  return !!(window as any).freighter;
+  return true;
 }
 
 // Connect to Freighter wallet
 export async function connectFreighter(): Promise<string | null> {
+  console.log("hello")
   try {
-    // Check for Freighter API
-    const freighter = (window as any).freighter;
-    if (!freighter) {
-      console.log('Please install Freighter wallet extension');
+    if (typeof window === 'undefined') {
+      console.log("null")
       return null;
     }
-    
-    // Get the API
-    const api = await freighter.api();
-    const isConnected = await api.isConnected();
-    
-    if (!isConnected) {
-      console.log('Please allow access in Freighter wallet');
-      return null;
+
+    const connected = await isConnected();
+    console.log(connected, "nil")
+      await requestAccess()
+    if (!connected) {
+      const access = await requestAccess();
+      if (access.error || !access.address) {
+        console.log('Please allow access in Freighter wallet');
+        return null;
+      }
+      return access.address;
     }
-    
-    const publicKey = await api.getPublicKey();
-    return publicKey;
+    console.log("all")
+
+    const address = await getAddress();
+    console.log(address)
+    return address.error ? null : address.address;
   } catch (error) {
     console.error('Failed to connect to Freighter:', error);
     return null;
@@ -39,12 +58,13 @@ export async function signWithFreighter(
   network: string
 ): Promise<string | null> {
   try {
-    const freighter = (window as any).freighter;
-    if (!freighter) return null;
-    
-    const api = await freighter.api();
-    const signedXDR = await api.signTransaction(transactionXDR, { network });
-    return signedXDR;
+    if (typeof window === 'undefined') return null;
+
+    const signed = await signTransaction(transactionXDR, {
+      networkPassphrase: getNetworkPassphrase(network),
+    });
+
+    return signed.error ? null : signed.signedTxXdr;
   } catch (error) {
     console.error('Failed to sign transaction:', error);
     return null;

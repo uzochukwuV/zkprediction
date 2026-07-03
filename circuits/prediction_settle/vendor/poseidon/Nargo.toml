@@ -1,0 +1,6 @@
+[package]
+name = "poseidon"
+type = "lib"
+compiler_version = ">=0.34.0"
+
+[dependencies]

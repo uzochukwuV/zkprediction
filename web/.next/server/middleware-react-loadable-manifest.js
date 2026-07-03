@@ -1,1 +1,0 @@
-self.__REACT_LOADABLE_MANIFEST='{"lib/store.ts -> ./wallet":{"id":5585,"files":[]}}';

@@ -1,31 +1,22 @@
 //! ZK Verification Module for UltraHonk Proofs
-//!
-//! This module provides integration with the Nethermind UltraHonk verifier
-//! for verifying ZK proofs on Soroban.
 
-use soroban_sdk::{BytesN, Env, Vec};
+use soroban_sdk::{Bytes, BytesN, Env};
 
-#[cfg(feature = "nethermind-verifier")]
+#[cfg(feature = "static-vk")]
 use ultrahonk_soroban_verifier::UltraHonkVerifier;
 
-#[cfg(not(feature = "nethermind-verifier"))]
+#[cfg(not(feature = "static-vk"))]
 pub struct UltraHonkVerifier {
     _env: Env,
 }
 
-#[cfg(not(feature = "nethermind-verifier"))]
+#[cfg(not(feature = "static-vk"))]
 impl UltraHonkVerifier {
     pub fn new(env: &Env) -> Self {
         Self { _env: env.clone() }
     }
 
-    pub fn verify(
-        &self,
-        _proof: &BytesN<64>,
-        _public_inputs: &BytesN<128>,
-        _vk_hash: &BytesN<32>,
-    ) -> bool {
-        // Stub for when verifier is not enabled
+    pub fn verify(&self, _proof: &Bytes, _public_inputs: &Bytes, _vk_hash: &BytesN<32>) -> bool {
         true
     }
 }

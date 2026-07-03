@@ -1,28 +1,31 @@
-import type { Metadata } from 'next';
+﻿import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 
+const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
+
 export const metadata: Metadata = {
-  title: 'zkPrediction - Minority Wins Prediction Market',
-  description: 'A private prediction market where MINORITY bettors win. Bet on outcomes privately and win big if you predict the overlooked option.',
-  keywords: ['prediction market', 'ZK proofs', 'Stellar', 'Soroban', 'minority wins', 'blockchain'],
+  title: 'zkPrediction',
+  description: 'Outcome-based prediction markets with private claims and on-chain settlement.',
+  keywords: ['prediction market', 'ZK proofs', 'Stellar', 'Soroban', 'blockchain'],
   openGraph: {
-    title: 'zkPrediction - Minority Wins Prediction Market',
-    description: 'Bet privately on predictions. The MINORITY wins the entire pool!',
+    title: 'zkPrediction',
+    description: 'Outcome-based prediction markets with private claims and on-chain settlement.',
     type: 'website',
   },
 };
 
 export default function RootLayout({
   children,
-}: {
+}: Readonly<{
   children: React.ReactNode;
-}) {
+}>) {
   return (
     <html lang="en">
       <head>
         <link rel="icon" href="/favicon.ico" />
       </head>
-      <body className="min-h-screen bg-dark-300">
+      <body className={`${inter.variable} min-h-screen bg-dark-300 text-bone-white antialiased font-sans`}>
         {children}
       </body>
     </html>

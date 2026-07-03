@@ -3,3 +3,4 @@ name = "prediction_settle"
 type = "bin"
 
 [dependencies]
+poseidon = { path = "./vendor/poseidon" }

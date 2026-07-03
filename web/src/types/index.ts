@@ -1,4 +1,4 @@
-// Types for zkPrediction - Minority Wins Prediction Market
+// Types for zkPrediction - outcome-based prediction market
 
 export interface PredictionParams {
   question: string;
@@ -9,7 +9,7 @@ export interface PredictionParams {
   poolToken: string;
 }
 
-export type PredictionStatus = 'Open' | 'Closed' | 'Resolved' | 'Settled';
+export type PredictionStatus = 'Open' | 'Closed' | 'Settled';
 
 export interface Prediction {
   id: number;
@@ -20,9 +20,6 @@ export interface Prediction {
   countA: number;
   countB: number;
   winningOption: number | null;
-  minorityOption: number | null;
-  minorityCount: number | null;
-  minorityTotal: bigint | null;
   creator: string;
 }
 
@@ -34,7 +31,7 @@ export interface Commitment {
 
 export interface Bet {
   slot: number;
-  choice: number; // 0 = Option A, 1 = Option B
+  choice: number;
   amount: bigint;
   commitment: string;
   blindingFactor: string;
@@ -81,7 +78,6 @@ export interface ContractConfig {
   rpcUrl: string;
 }
 
-// Events from contract
 export interface PredictionCreatedEvent {
   id: number;
   creator: string;
@@ -96,30 +92,25 @@ export interface BetCommittedEvent {
   amount: bigint;
 }
 
-export interface PredictionResolvedEvent {
-  predictionId: number;
-  winningOption: number;
-  minorityOption: number;
-}
-
 export interface PredictionSettledEvent {
   predictionId: number;
+  winningOption: number;
+  countA: number;
+  countB: number;
 }
 
-// API response types
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
   error?: string;
 }
 
-// User's local bet tracking
 export interface UserBet {
-  predictionId: number;
-  choice: number;
-  amount: bigint;
+  predictionId: number | bigint;
+  choice: number | bigint;
+  amount: bigint| number;
   blindingFactor: string;
-  slot: number;
+  slot: number | bigint;
   committed: boolean;
   claimed: boolean;
 }

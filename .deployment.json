@@ -1,0 +1,7 @@
+{
+  "network": "testnet",
+  "contract_id": "CC7Y3EYLPK77UYY2SJPMSW57FYKGYSAD2AY2JC5I25ATZUHJHNYGIJXQ",
+  "vk_hash": "187888bcabfab203a3709453b672bce66caf17f8cec410b3dfe8774fa6758a9b",
+  "wasm_hash": "58309242a9056464f628ed90d89256f90b9c19c5ca7562da4dec1eadf39e819e",
+  "deployed_at": "2026-07-03T02:09:11+01:00"
+}

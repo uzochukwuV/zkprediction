@@ -1,7 +1,7 @@
-// Global state management with Zustand
+﻿// Global state management with Zustand
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { 
   Prediction, 
   UserBet, 
@@ -68,7 +68,7 @@ export const useConfigStore = create<ConfigStore>()(
   persist(
     (set) => ({
       config: {
-        contractId: 'CDHSVJYDZDCZPEZXOS5A7QGYOYAOEX6MUHJV6M3ZTXMQ5B5PKRWEG7LU',
+        contractId: 'CC7Y3EYLPK77UYY2SJPMSW57FYKGYSAD2AY2JC5I25ATZUHJHNYGIJXQ',
         network: 'testnet',
         rpcUrl: 'https://soroban-testnet.stellar.org:443',
       },
@@ -161,7 +161,28 @@ export const useUserBetsStore = create<UserBetsStore>()(
         
       clearBets: () => set({ bets: [] }),
     }),
-    { name: 'zkprediction-bets' }
+    {
+      name: 'zkprediction-bets',
+      storage: createJSONStorage(() => localStorage, {
+        replacer: (_, value) => (typeof value === 'bigint' ? value.toString() : value),
+        reviver: (_, value) => {
+          if (value && typeof value === 'object' && 'bets' in value && Array.isArray(value.bets)) {
+            return {
+              ...value,
+              bets: value.bets.map((bet: any) => ({
+                ...bet,
+                predictionId: typeof bet.predictionId === 'string' && /^-?\\d+$/.test(bet.predictionId) ? Number(bet.predictionId) : bet.predictionId,
+                choice: typeof bet.choice === 'string' && /^-?\\d+$/.test(bet.choice) ? Number(bet.choice) : bet.choice,
+                amount: typeof bet.amount === 'string' && /^-?\\d+$/.test(bet.amount) ? BigInt(bet.amount) : bet.amount,
+                slot: typeof bet.slot === 'string' && /^-?\\d+$/.test(bet.slot) ? Number(bet.slot) : bet.slot,
+              })),
+            };
+          }
+
+          return value;
+        },
+      }),
+    }
   )
 );
 
@@ -204,3 +225,4 @@ export const useUIStore = create<UIStore>((set) => ({
   openModal: (modalOpen) => set({ modalOpen }),
   closeModal: () => set({ modalOpen: null }),
 }));
+

@@ -28,7 +28,6 @@ export const predictionAbi = [
     inputs: [
       { name: 'bettor', type: 'address' },
       { name: 'prediction_id', type: 'u64' },
-      { name: 'choice', type: 'u32' },
       { name: 'amount', type: 'i128' },
       { name: 'commitment', type: 'bytes32' },
       { name: 'escrow_amount', type: 'i128' },
@@ -41,21 +40,23 @@ export const predictionAbi = [
     outputs: [{ name: 'success', type: 'bool' }],
   },
   {
-    name: 'resolve',
+    name: 'settle',
     inputs: [
       { name: 'prediction_id', type: 'u64' },
       { name: 'winning_option', type: 'u32' },
+      { name: 'count_a', type: 'u32' },
+      { name: 'count_b', type: 'u32' },
     ],
     outputs: [{ name: 'success', type: 'bool' }],
   },
   {
-    name: 'settle',
+    name: 'claim_reward',
     inputs: [
       { name: 'prediction_id', type: 'u64' },
-      { name: 'proof', type: 'bytes64' },
-      { name: 'public_inputs', type: 'bytes128' },
+      { name: 'slot', type: 'u32' },
+      { name: 'proof', type: 'bytes' },
     ],
-    outputs: [{ name: 'success', type: 'bool' }],
+    outputs: [{ name: 'payout', type: 'i128' }],
   },
   {
     name: 'get_prediction',
@@ -70,12 +71,9 @@ export const predictionAbi = [
           { name: 'status', type: 'u32' },
           { name: 'bet_count', type: 'u32' },
           { name: 'total_pool', type: 'i128' },
+          { name: 'winning_option', type: 'u32' },
           { name: 'count_a', type: 'u32' },
           { name: 'count_b', type: 'u32' },
-          { name: 'winning_option', type: 'u32' },
-          { name: 'minority_option', type: 'u32' },
-          { name: 'minority_count', type: 'u32' },
-          { name: 'minority_total', type: 'i128' },
           { name: 'creator', type: 'address' },
         ],
       },
@@ -103,6 +101,11 @@ export const predictionAbi = [
     name: 'get_vk_hash',
     inputs: [],
     outputs: [{ name: 'vk_hash', type: 'bytes32' }],
+  },
+  {
+    name: 'get_prediction_count',
+    inputs: [],
+    outputs: [{ name: 'count', type: 'u64' }],
   },
 ] as const;
 
