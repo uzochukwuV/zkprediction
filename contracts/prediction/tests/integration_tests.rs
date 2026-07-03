@@ -14,9 +14,10 @@ const PUBLIC_INPUTS_BYTES: &[u8] =
 
 fn register_client(env: &Env) -> prediction_contract::Client<'_> {
     let admin = Address::generate(env);
+    let pool_token = Address::generate(env);
     let vk_bytes = Bytes::from_slice(env, VK_BYTES);
     let wasm: &[u8] = include_bytes!("../../../target/wasm32v1-none/release/prediction.wasm");
-    let contract_id = env.register(wasm, (admin, vk_bytes));
+    let contract_id = env.register(wasm, (admin, pool_token, vk_bytes));
     prediction_contract::Client::new(env, &contract_id)
 }
 

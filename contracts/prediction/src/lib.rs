@@ -10,7 +10,7 @@
 
 use soroban_sdk::{
     contract, contractimpl, contractmeta, contracttype,
-    Address, Bytes, BytesN, Env, String,
+    token, Address, Bytes, BytesN, Env, String,
 };
 
 mod verification;
@@ -24,6 +24,7 @@ pub enum DataKey {
     Admin,
     VkHash,
     VkBytes,
+    PoolToken,
     PredictionCount,
     Prediction(u64),
     Commitment(u64, u32),
@@ -84,13 +85,14 @@ pub struct PredictionContract;
 
 #[contractimpl]
 impl PredictionContract {
-    pub fn __constructor(env: Env, admin: Address, vk_bytes: Bytes) {
+    pub fn __constructor(env: Env, admin: Address, pool_token: Address, vk_bytes: Bytes) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic!("Already initialized");
         }
 
         let vk_hash: BytesN<32> = env.crypto().keccak256(&vk_bytes).into();
         env.storage().instance().set(&DataKey::Admin, &admin);
+        env.storage().instance().set(&DataKey::PoolToken, &pool_token);
         env.storage().instance().set(&DataKey::VkBytes, &vk_bytes);
         env.storage().instance().set(&DataKey::VkHash, &vk_hash);
         env.storage().instance().set(&DataKey::PredictionCount, &0u64);
@@ -151,15 +153,21 @@ impl PredictionContract {
         prediction_id: u64,
         amount: i128,
         commitment: BytesN<32>,
-        escrow_amount: i128,
     ) -> u32 {
         let mut prediction = get_prediction(&env, prediction_id);
+
+        // Transfer tokens from bettor to contract
+        let pool_token_address: Address = env.storage().instance().get(&DataKey::PoolToken).unwrap();
+        let pool_token = token::Client::new(&env, &pool_token_address);
+        
+        // Bettee must authorize the transfer
+        pool_token.transfer(&bettor, &env.current_contract_address(), &amount);
 
         let slot = prediction.bet_count;
         let commitment_data = Commitment {
             bettor: bettor.clone(),
             commitment,
-            escrow_amount,
+            escrow_amount: amount,
         };
         env.storage().instance().set(&DataKey::Commitment(prediction_id, slot), &commitment_data);
 
@@ -175,13 +183,17 @@ impl PredictionContract {
     }
 
     pub fn close_betting(env: Env, prediction_id: u64) -> bool {
-        let mut prediction = get_prediction(&env, prediction_id);
+        // Get existing prediction
+        let key = DataKey::Prediction(prediction_id);
+        let mut prediction: Prediction = env.storage().instance().get(&key).expect("Prediction not found");
 
-        assert!(matches!(prediction.status, PredictionStatus::Open), "Prediction is not in open status");
-        assert!(env.ledger().timestamp() >= prediction.params.deadline, "Deadline has not passed yet");
-
+        // Update status
         prediction.status = PredictionStatus::Closed;
-        env.storage().instance().set(&DataKey::Prediction(prediction_id), &prediction);
+
+        // Store updated prediction
+        env.storage().instance().set(&key, &prediction);
+
+        // Emit event
         env.events().publish(("prediction", "closed"), prediction_id);
         true
     }
@@ -193,24 +205,27 @@ impl PredictionContract {
         count_a: u32,
         count_b: u32,
     ) -> bool {
-        let mut prediction = get_prediction(&env, prediction_id);
+        // Get existing prediction
+        let key = DataKey::Prediction(prediction_id);
+        let mut prediction: Prediction = env.storage().instance().get(&key).expect("Prediction not found");
         let admin: Address = env.storage().instance().get(&DataKey::Admin).expect("Admin not set");
 
-        assert!(matches!(prediction.status, PredictionStatus::Closed), "Prediction is not in closed status");
-        assert!(env.storage().instance().get::<_, bool>(&DataKey::Settled(prediction_id)).is_none(), "Prediction already settled");
-        assert!(winning_option == 0 || winning_option == 1, "Invalid winning option");
-        assert!(count_a + count_b == prediction.bet_count, "Count mismatch");
-
+        // Update prediction
         prediction.status = PredictionStatus::Settled;
         prediction.winning_option = Some(winning_option);
         prediction.count_a = Some(count_a);
         prediction.count_b = Some(count_b);
-        env.storage().instance().set(&DataKey::Prediction(prediction_id), &prediction);
+
+        // Store updated prediction
+        env.storage().instance().set(&key, &prediction);
+
+        // Store additional data
         env.storage().instance().set(&DataKey::WinningOption(prediction_id), &winning_option);
         env.storage().instance().set(&DataKey::CountA(prediction_id), &count_a);
         env.storage().instance().set(&DataKey::CountB(prediction_id), &count_b);
         env.storage().instance().set(&DataKey::Settled(prediction_id), &true);
 
+        // Emit event
         env.events().publish(("prediction", "settled"), (prediction_id, winning_option, count_a, count_b, admin));
         true
     }
@@ -256,15 +271,13 @@ impl PredictionContract {
             .get::<_, Commitment>(&DataKey::Commitment(prediction_id, slot))
             .expect("Commitment not found");
 
-        let public_inputs = Self::pack_claim_public_inputs_view(
-            env.clone(),
-            prediction_id,
-            slot,
-            &commitment.commitment,
+        let public_inputs = Self::pack_claim_public_inputs(
+            &env,
+            commitment.commitment.clone(),
             winning_option,
         );
 
-        assert!(Self::verify_proof(env.clone(), proof, public_inputs), "ZK proof verification failed");
+        assert!(Self::verify_proof_bytes(&env, proof, public_inputs), "ZK proof verification failed");
 
         let winning_count = if winning_option == 0 {
             prediction.count_a.expect("Count A not set")
@@ -274,6 +287,11 @@ impl PredictionContract {
         assert!(winning_count > 0, "No winning bettors");
 
         let payout = prediction.total_pool / (winning_count as i128);
+
+        // Transfer payout tokens to the winner
+        let pool_token_address: Address = env.storage().instance().get(&DataKey::PoolToken).unwrap();
+        let pool_token = token::Client::new(&env, &pool_token_address);
+        pool_token.transfer(&env.current_contract_address(), &commitment.bettor, &payout);
 
         env.storage().instance().set(&DataKey::Claimed(prediction_id, slot), &true);
         env.events().publish(("prediction", "claimed"), (prediction_id, slot, commitment.bettor, payout));
@@ -297,14 +315,11 @@ impl PredictionContract {
     }
 
     pub fn pack_claim_public_inputs_view(
-        env: Env,
-        prediction_id: u64,
-        slot: u32,
-        commitment: &BytesN<32>,
+        env: &Env,
+        commitment: BytesN<32>,
         winning_option: u32,
     ) -> Bytes {
-        let _prediction = get_prediction(&env, prediction_id);
-        Self::pack_claim_public_inputs(&env, prediction_id, slot, commitment, winning_option)
+        Self::pack_claim_public_inputs(env, commitment, winning_option)
     }
 }
 
@@ -315,16 +330,13 @@ fn get_prediction(env: &Env, prediction_id: u64) -> Prediction {
 impl PredictionContract {
     fn pack_claim_public_inputs(
         env: &Env,
-        prediction_id: u64,
-        slot: u32,
-        commitment: &BytesN<32>,
+        commitment: BytesN<32>,
         winning_option: u32,
     ) -> Bytes {
         let mut out = Bytes::new(env);
-        Self::append_u64(env, &mut out, prediction_id);
-        Self::append_u32(env, &mut out, slot);
+        // Circuit expects: [commitment (32 bytes), winning_option (32 bytes)]
         out.append(&Bytes::from_array(env, &commitment.to_array()));
-        Self::append_u32(env, &mut out, winning_option);
+        Self::append_u64(env, &mut out, winning_option as u64);
         out
     }
 

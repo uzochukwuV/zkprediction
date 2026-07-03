@@ -100,7 +100,19 @@ fn verify_proof_bytes(env: &Env, proof: Bytes, public_inputs: Bytes) -> bool {
         Err(_) => return false,
     };
 
-    verifier.verify(&proof, &public_inputs).is_ok()
+    verifier.verify(env, &proof, &public_inputs).is_ok()
+}
+
+fn pack_claim_public_inputs(
+    env: &Env,
+    commitment: BytesN<32>,
+    winning_option: u32,
+) -> Bytes {
+    // Circuit expects: [commitment (32 bytes), winning_option (32 bytes)]
+    let mut out = Bytes::new(env);
+    out.append(&Bytes::from_array(env, &commitment.to_array()));
+    Self::append_u64(env, &mut out, winning_option as u64);
+    out
 }
 ```
 

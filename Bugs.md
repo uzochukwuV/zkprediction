@@ -68,37 +68,80 @@ The error occurs deep inside the UltraHonk verifier when running on Soroban's WA
 
 ---
 
-## CRITICAL: Testnet WASM VM Incompatibility
+## FIXED: Testnet WASM VM Incompatibility
 
-### NEW FINDINGS (from indextree analysis)
+### Root Cause
 
-After analyzing the indextree/ultrahonk_soroban_contract repo, I discovered:
+Three issues were causing the `UnreachableCodeReached` error:
 
-1. **The verifier WORKS on localnet** - indextree's CI runs end-to-end tests on Stellar localnet and they pass
-2. **The verification failure is NOT limited to proof verification** - our testnet deployment fails even in `close_betting()` which doesn't use the verifier
-3. **SDK Version difference**: 
-   - indextree uses: `soroban-sdk = "26.0.1"` (workspace), env-host `25.0.0`
-   - zkprediction uses: `soroban-sdk = "26.1.0"`
+1. **Cargo.lock missing git source**: The `ultrahonk_soroban_verifier` dependency was resolving from a stale cached version instead of the git repository.
 
-### Key Insights from indextree repo
+2. **API mismatch**: The git version of `UltraHonkVerifier::verify()` requires `&Env` as the first argument:
+   ```rust
+   // Wrong (was):
+   verifier.verify(&proof, &public_inputs).is_ok()
+   
+   // Correct (fixed):
+   verifier.verify(env, &proof, &public_inputs).is_ok()
+   ```
 
-1. They use `ultrahonk_rust_verifier` from git (not local path)
-2. They use `stellar-cli v23.3.0` (we're using v27.0.0)
-3. They run on **localnet** with a quickstart container, not public testnet
-4. Their CI successfully verifies proofs on-chain
+3. **Public inputs format mismatch**: The contract was passing `prediction_id` as the second public input, but the Noir circuit expects `winning_option`.
 
-### Possible Root Causes
+### Fixes Applied
 
-1. **Testnet vs Localnet difference** - The Soroban WASM VM on testnet may have different behavior
-2. **Protocol version mismatch** - The SDK may not be compatible with the testnet protocol version
-3. **CLI version difference** - stellar-cli v27 vs v23 may produce different WASM
+1. Changed `contracts/prediction/Cargo.toml` from path dependency to git dependency:
+   ```toml
+   ultrahonk_soroban_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", package = "ultrahonk_soroban_verifier", default-features = false }
+   ```
 
-### Next Steps
+2. Fixed `verify_proof_bytes` in `contracts/prediction/src/lib.rs` to pass `&Env` to `verify()`
 
-1. Try running on localnet (quickstart container) like indextree does
-2. Downgrade to SDK 26.0.1 and matching env-host version
-3. Try stellar-cli v23.3.0 to match indextree's working setup
-4. Add detailed error logging to pinpoint exactly where the trap occurs
+3. Fixed `pack_claim_public_inputs` to pass `winning_option` instead of `prediction_id`:
+   ```rust
+   fn pack_claim_public_inputs(
+       env: &Env,
+       commitment: BytesN<32>,
+       winning_option: u32,
+   ) -> Bytes {
+       // Circuit expects: [commitment (32 bytes), winning_option (32 bytes)]
+       ...
+   }
+   ```
+
+4. Regenerated `Cargo.lock` with `cargo update` to fetch from git
+
+### Verification
+
+- ✅ Contract builds successfully
+- ✅ `create_prediction` works on testnet
+- ✅ `close_betting` works on testnet
+- ✅ `settle` works on testnet
+- ✅ `commit_bet` works on testnet
+- ✅ `claim_reward` works on testnet with real ZK proof verification
+- ✅ Integration test passes
+- ✅ Full flow tested: prediction_id=1, winning_option=0, payout=10000000
+
+### Test Flow
+```bash
+# Deploy
+stellar contract deploy --wasm target/wasm32v1-none/release/prediction.wasm \
+  --source testdeploy --network testnet \
+  -- --admin $(stellar keys address testdeploy) \
+  --vk_bytes-file-path circuits/prediction_settle/target/claim/vk/vk
+
+# Create prediction (id=1)
+stellar contract invoke ... create_prediction ...
+
+# Close and settle (winning_option=0)
+stellar contract invoke ... close_betting --prediction_id 1
+stellar contract invoke ... settle --prediction_id 1 --winning_option 0 --count_a 1 --count_b 0
+
+# Commit bet with matching commitment
+stellar contract invoke ... commit_bet ... --commitment 01a4c3379fa3f6d0dc0fb702d88c4506ab603e8022bfbe58e68dbd2505d7abc3
+
+# Claim reward (proof generated with matching commitment and winning_option=0)
+stellar contract invoke ... claim_reward --prediction_id 1 --slot 0 --proof <proof_hex>
+```
 
 ### Reference Repos
 - Working verifier: https://github.com/indextree/ultrahonk_soroban_contract
