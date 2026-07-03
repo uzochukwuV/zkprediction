@@ -130,3 +130,44 @@ fn verify_proof_bytes(env: &Env, proof: Bytes, public_inputs: Bytes) -> bool {
 - [ProofBridge Verifier Documentation](https://docs.pfbridge.xyz/reference/soroban-verifier)
 - [Soroban BN254 Host Functions](https://developers.stellar.org/docs/smart-contracts/reference/crypto)
 - [UltraHonk Protocol](https://github.com/AztecProtocol/aztec-packages/tree/master/noir-projects/ecdsa-stack)
+
+## Testnet Deployment & Testing
+
+### Prerequisites
+
+- **WSL (Windows Subsystem for Linux)** - Required for running test scripts
+- **Node.js** - Required for Poseidon commitment generation
+- **stellar-cli v27.0.0** - For contract deployment and testing
+
+### Test Scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/testnet_flow.sh` | Full lifecycle: deploy → create market → commit bets → settle |
+| `scripts/testnet_claim.sh` | Generate claim proof and call `claim_reward` |
+| `scripts/deploy_testnet.sh` | Deploy contract to testnet |
+
+### Running Tests
+
+```bash
+# 1. Deploy and run full flow
+bash scripts/testnet_flow.sh
+
+# 2. Generate proof and claim rewards
+# Set PREDICTION_ID from step 1
+bash scripts/testnet_claim.sh 1
+```
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| NETWORK | testnet | Stellar network |
+| IDENTITY | deployer | Deployer key |
+| POOL_TOKEN | CDLZFC... | USDC on testnet |
+
+### Notes
+
+- Scripts require WSL on Windows
+- Node.js with circomlibjs is used for Poseidon hash
+- Proof generation uses bb v0.87.0 with `--scheme ultra_honk --oracle_hash keccak`
