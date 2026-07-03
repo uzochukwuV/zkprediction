@@ -111,8 +111,7 @@ stellar contract invoke \
   --bettor "${BETTER1}" \
   --prediction_id "${PREDICTION_ID}" \
   --amount "${BET_ONE}" \
-  --commitment "${COMMITMENT1}" \
-  --escrow_amount "${BET_ONE}"
+  --commitment "${COMMITMENT1}"
 
 stellar contract invoke \
   --id "${CONTRACT_ID}" \
@@ -122,8 +121,7 @@ stellar contract invoke \
   --bettor "${BETTER2}" \
   --prediction_id "${PREDICTION_ID}" \
   --amount "${BET_TWO}" \
-  --commitment "${COMMITMENT2}" \
-  --escrow_amount "${BET_TWO}"
+  --commitment "${COMMITMENT2}"
 
 echo "Votes committed with hidden commitments."
 echo ""

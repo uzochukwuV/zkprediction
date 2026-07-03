@@ -1,0 +1,212 @@
+# zkPrediction Quickstart
+
+One command to deploy and test the full ZK prediction market on Stellar testnet.
+
+## Prerequisites
+
+```bash
+# Install Stellar CLI
+cargo install stellar-cli
+
+# Install nargo (Noir)
+curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+noirup
+
+# Install barretenberg (ZK proving)
+git clone https://github.com/AztecProtocol/barretenberg
+cd barretenberg
+cmake --preset release
+cmake --build --preset release -t bb
+export PATH=$PWD/cpp/build/release:$PATH
+
+# Install Node.js (for commitment generation)
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
+```
+
+## Quick Start (One Command)
+
+```bash
+cd zkprediction
+./scripts/testnet_flow.sh
+```
+
+This will:
+1. Build the Soroban contract
+2. Compile the Noir ZK circuit
+3. Deploy to testnet
+4. Create a prediction market
+5. Commit two bets with hidden commitments
+
+## Manual Step-by-Step
+
+### 1. Deploy Contract
+
+```bash
+# Full deploy with VK generation
+./scripts/deploy_testnet.sh
+
+# Or with custom token
+POOL_TOKEN=CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV \
+./scripts/deploy_testnet.sh
+```
+
+### 2. Create Prediction
+
+```bash
+CONTRACT_ID=$(cat .deployment.json | jq -r .contract_id)
+
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --source deployer \
+  --network testnet \
+  -- create_prediction \
+  --creator $(stellar keys address deployer) \
+  --question "Will BTC reach 100k by 2025?" \
+  --option_a "Yes" \
+  --option_b "No" \
+  --deadline 9999999999 \
+  --reserve_price 1000000 \
+  --pool_token CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV
+```
+
+### 3. Commit Bet
+
+```bash
+# Generate commitment (vote=0, nonce=11)
+VOTE=0
+NONCE=11
+cd web && node -e '
+const { buildPoseidon } = require("circomlibjs");
+(async () => {
+  const poseidon = await buildPoseidon();
+  const c = poseidon([BigInt(process.argv[1]), BigInt(process.argv[2])]);
+  console.log(BigInt(poseidon.F.toObject(c)).toString(16).padStart(64,"0"));
+})();
+' "$VOTE" "$NONCE"
+cd ..
+
+# Commit bet
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --source bettor1 \
+  --network testnet \
+  -- commit_bet \
+  --bettor $(stellar keys address bettor1) \
+  --prediction_id 1 \
+  --amount 10000000 \
+  --commitment <commitment_hex>
+```
+
+### 4. Settle & Claim
+
+```bash
+# Close betting
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --source deployer \
+  --network testnet \
+  -- close_betting --prediction_id 1
+
+# Settle (winning_option=0)
+stellar contract invoke \
+  --id "$CONTRACT_ID" \
+  --source deployer \
+  --network testnet \
+  -- settle --prediction_id 1 --winning_option 0 --count_a 1 --count_b 0
+
+# Generate proof and claim
+./scripts/testnet_claim.sh 1
+```
+
+## Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `POOL_TOKEN` | CASJ2W5ODS6... | SAC token for staking |
+| `NETWORK` | testnet | Network to deploy to |
+| `IDENTITY` | deployer | Key name for deployment |
+| `PREDICTION_ID` | 1 | Prediction ID for claim |
+| `VOTE` | 0 | Vote choice (0=A, 1=B) |
+| `NONCE` | 11 | Random nonce |
+
+## Files Generated
+
+```
+.deployment.json          # Contract deployment info
+├── contract_id          # Deployed contract address
+├── pool_token           # Token used
+└── vk_bytes_path        # VK location
+
+circuits/prediction_settle/target/claim/
+├── vk/vk                 # Verification key
+├── proof.bin/proof       # Generated proof
+└── proof.bin/public_inputs  # Public inputs
+```
+
+## Troubleshooting
+
+### "Stellar CLI not found"
+```bash
+cargo install stellar-cli
+```
+
+### "nargo not found"
+```bash
+curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | bash
+noirup
+```
+
+### "bb not found"
+```bash
+# Install from Aztec repo
+git clone https://github.com/AztecProtocol/barretenberg
+cd barretenberg && ./compile_release.sh
+export PATH=$PWD/cpp/build/release:$PATH
+```
+
+### "Insufficient balance"
+```bash
+stellar keys fund deployer --network testnet
+stellar keys fund bettor1 --network testnet
+stellar keys fund bettor2 --network testnet
+```
+
+### "Trustline not established"
+```bash
+# Add trustline for token
+stellar contract invoke \
+  --source bettor1 \
+  --network testnet \
+  --id CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV \
+  -- trust \
+  --addr $(stellar keys address bettor1)
+```
+
+### "Commitment mismatch"
+Make sure the VOTE and NONCE used in `testnet_claim.sh` match what you used when committing the bet.
+
+## Verifying the Deployment
+
+```bash
+# Check contract exists
+stellar contract invoke \
+  --id CCGZD3PTNY4F3EUC4Y4TMR25EYBU6FSS3HDQV7OUJNAWOCFXTLYOUQG7 \
+  --source deployer \
+  --network testnet \
+  -- get_vk_hash
+
+# Check prediction
+stellar contract invoke \
+  --id CCGZD3PTNY4F3EUC4Y4TMR25EYBU6FSS3HDQV7OUJNAWOCFXTLYOUQG7 \
+  --source deployer \
+  --network testnet \
+  -- get_prediction --prediction_id 1
+```
+
+## Next Steps
+
+1. **Explore the Frontend**: `cd web && npm run dev`
+2. **Read the Full Docs**: See [README.md](README.md)
+3. **Read Bug History**: See [Bugs.md](Bugs.md)
+4. **Plan V2**: Security fixes and features in Bugs.md
