@@ -14,7 +14,7 @@ static-vk = []
 
 [dependencies]
 soroban-sdk = { version = "26.1.0", default-features = false, features = ["alloc"] }
-ultrahonk_soroban_verifier = { path = "../../yugocabrio-rs-soroban-ultrahonk/crates/ultrahonk-soroban-verifier" }
+ultrahonk_soroban_verifier = { git = "https://github.com/yugocabrio/ultrahonk-rust-verifier.git", package = "ultrahonk_soroban_verifier", default-features = false }
 
 [dev-dependencies]
 soroban-sdk = { version = "26.1.0", features = ["testutils", "alloc"] }

@@ -65,3 +65,41 @@ The error occurs deep inside the UltraHonk verifier when running on Soroban's WA
 
 ### Status
 **UNDER INVESTIGATION**
+
+---
+
+## CRITICAL: Testnet WASM VM Incompatibility
+
+### NEW FINDINGS (from indextree analysis)
+
+After analyzing the indextree/ultrahonk_soroban_contract repo, I discovered:
+
+1. **The verifier WORKS on localnet** - indextree's CI runs end-to-end tests on Stellar localnet and they pass
+2. **The verification failure is NOT limited to proof verification** - our testnet deployment fails even in `close_betting()` which doesn't use the verifier
+3. **SDK Version difference**: 
+   - indextree uses: `soroban-sdk = "26.0.1"` (workspace), env-host `25.0.0`
+   - zkprediction uses: `soroban-sdk = "26.1.0"`
+
+### Key Insights from indextree repo
+
+1. They use `ultrahonk_rust_verifier` from git (not local path)
+2. They use `stellar-cli v23.3.0` (we're using v27.0.0)
+3. They run on **localnet** with a quickstart container, not public testnet
+4. Their CI successfully verifies proofs on-chain
+
+### Possible Root Causes
+
+1. **Testnet vs Localnet difference** - The Soroban WASM VM on testnet may have different behavior
+2. **Protocol version mismatch** - The SDK may not be compatible with the testnet protocol version
+3. **CLI version difference** - stellar-cli v27 vs v23 may produce different WASM
+
+### Next Steps
+
+1. Try running on localnet (quickstart container) like indextree does
+2. Downgrade to SDK 26.0.1 and matching env-host version
+3. Try stellar-cli v23.3.0 to match indextree's working setup
+4. Add detailed error logging to pinpoint exactly where the trap occurs
+
+### Reference Repos
+- Working verifier: https://github.com/indextree/ultrahonk_soroban_contract
+- Original verifier: https://github.com/yugocabrio/ultrahonk-rust-verifier

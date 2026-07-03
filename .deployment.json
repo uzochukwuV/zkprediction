@@ -1,8 +1,1 @@
-{
-  "network": "testnet",
-  "contract_id": "CCTU4RTJBTUK47XKXGWUIK5IISN2DW5QPVEL4J6RAR2JT5CLWBTSZKTY",
-  "vk_hash": "187888bcabfab203a3709453b672bce66caf17f8cec410b3dfe8774fa6758a9b",
-  "vk_bytes_path": "/mnt/c/Users/ASUS FX95G/Documents/apps/zkprediction/circuits/prediction_settle/target/vk/vk",
-  "wasm_hash": "129ccdaf8063bbe0cb79c345b8106ee7dc06dd1c31bdf4a193b870ef656d1a69",
-  "deployed_at": "2026-07-03T11:56:57+01:00"
-}
+{"network":"testnet","contract_id":"CCUD6G7ZBG5RTTEQLIUXM2YHAAAPWQ3MIVOATV2EOOYWNJKJ4XPXAMDV","vk_bytes_path":"circuits/prediction_settle/target/claim/vk/vk","wasm_hash":"67384d85476d2201528f087f9c01d50b0e04601a46786bed8661a46ef794622e"}

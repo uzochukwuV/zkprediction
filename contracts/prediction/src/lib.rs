@@ -236,7 +236,7 @@ impl PredictionContract {
             Err(_) => return false,
         };
 
-        verifier.verify(&proof, &public_inputs).is_ok()
+        verifier.verify(env, &proof, &public_inputs).is_ok()
     }
 
     pub fn claim_reward(
