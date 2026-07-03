@@ -1,4 +1,36 @@
-# Bugs.md
+# Bugs.md - Development Log & Testnet Results
+
+## Summary
+
+This file documents the development journey, bugs encountered, and **fully verified testnet deployment** with ZK proof verification.
+
+---
+
+## Testnet Deployment Results ⭐
+
+### Contract Addresses (Testnet)
+
+| Component | Address |
+|-----------|---------|
+| Prediction Contract | `CCGZD3PTNY4F3EUC4Y4TMR25EYBU6FSS3HDQV7OUJNAWOCFXTLYOUQG7` |
+| SAC Token | `CASJ2W5ODS6CXA34RXSXEE4A743NMNQHTPBCFINJXCVNV75VJJNFZZRV` |
+| Asset Issuer | `GAO4IFRZOJEDVFDZ4V42PFUEUGMCMMXMPKYNBPEUYEF6DXVP54ZRKTCQ` |
+
+### Complete Transaction Log
+
+| Step | TX Hash | Result |
+|------|---------|--------|
+| Deploy Contract | `094058a0...` | ✅ |
+| Create Prediction | `5beae105...` | ✅ |
+| Bettor1 Commits | `beed4163...` | ✅ 10M TESTCOIN staked |
+| Bettor2 Commits | `9ea6cef4...` | ✅ 10M TESTCOIN staked |
+| Close Betting | `2d8fb26a...` | ✅ |
+| Settle | `80ad1083...` | ✅ |
+| **Claim Reward** ⭐ | `e6238d1f...` | ✅ **ZK Proof Verified!** |
+
+**Final Result**: Winner claimed 10,000,000 TESTCOIN with on-chain ZK proof verification!
+
+---
 
 ## FIXED: ZK Proof Verification Failure
 
