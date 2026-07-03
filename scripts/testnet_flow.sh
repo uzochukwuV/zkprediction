@@ -8,19 +8,6 @@ NC='\033[0m'
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-if [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
-  if command -v wsl.exe >/dev/null 2>&1; then
-    if command -v cygpath >/dev/null 2>&1; then
-      WSL_ROOT="$(cygpath -u "$ROOT_DIR")"
-    else
-      WSL_ROOT="$(wslpath "$ROOT_DIR")"
-    fi
-    exec wsl bash -lc "cd '$WSL_ROOT' && bash scripts/testnet_flow.sh"
-  fi
-  echo -e "${RED}This flow must run in WSL.${NC}"
-  exit 1
-fi
-
 DEPLOY_SCRIPT="${ROOT_DIR}/scripts/deploy_testnet.sh"
 NETWORK="testnet"
 IDENTITY="deployer"

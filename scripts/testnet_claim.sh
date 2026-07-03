@@ -16,19 +16,6 @@ CONTRACT_ID="${CONTRACT_ID:-}"
 CLAIM_SOURCE="${CLAIM_SOURCE:-${IDENTITY}}"
 CLAIM_DEBUG="${CLAIM_DEBUG:-1}"
 
-if [[ -z "${WSL_DISTRO_NAME:-}" ]]; then
-  if command -v wsl.exe >/dev/null 2>&1; then
-    if command -v cygpath >/dev/null 2>&1; then
-      WSL_ROOT="$(cygpath -u "$ROOT_DIR")"
-    else
-      WSL_ROOT="$(wslpath "$ROOT_DIR")"
-    fi
-    exec wsl bash -lc "cd '$WSL_ROOT' && bash scripts/testnet_claim.sh '$PREDICTION_ID'"
-  fi
-  echo "This flow must run in WSL."
-  exit 1
-fi
-
 command -v stellar >/dev/null 2>&1 || { echo "Stellar CLI not found"; exit 1; }
 
 NODE_BIN="$(command -v node 2>/dev/null || command -v node.exe 2>/dev/null || true)"
