@@ -13,3 +13,4 @@ zkauction/
 zkauction/
 
 *.next/
+*out/
